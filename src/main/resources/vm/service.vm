@@ -1,0 +1,17 @@
+package com.haday.qms.${serviceImpl};
+
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import ${package}.${service}.${name}Service;
+import ${package}.${dao}.${name}Mapper;
+import ${package}.${entity}.${name};
+import org.springframework.stereotype.Service;
+
+/**
+* @author chenwh3
+*/
+@Service
+public class ${name}ServiceImpl extends ServiceImpl<${name}Mapper, ${name}>
+    implements ${name}Service {
+
+}
+

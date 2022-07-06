@@ -1,0 +1,11 @@
+package com.haday.qms.${service};
+
+import ${package}.${entity}.${name};
+import com.baomidou.mybatisplus.extension.service.IService;
+
+/**
+* @author chenwh3
+*/
+public interface ${name}Service extends IService<${name}> {
+
+}
