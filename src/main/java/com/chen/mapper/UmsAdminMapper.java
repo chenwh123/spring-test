@@ -1,12 +1,12 @@
-package ${package}.${dao};
+package com.chen.mapper;
 
-import ${package}.${entity}.${name};
+import com.chen.model.entity.UmsAdmin;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 /**
 * @author chenwh3
 */
 @Mapper
-public interface ${name}Mapper extends BaseMapper<${name}> {
+public interface UmsAdminMapper extends BaseMapper<UmsAdmin> {
 
 }
