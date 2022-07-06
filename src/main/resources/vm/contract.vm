@@ -1,4 +1,4 @@
-package com.haday.qms.${service};
+package ${package}.${service};
 
 import ${package}.${entity}.${name};
 import com.baomidou.mybatisplus.extension.service.IService;

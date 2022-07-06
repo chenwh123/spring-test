@@ -1,11 +1,11 @@
-package ${package}.${controller};
+package com.chen.controller;
 
-import ${package}.${controller}.base.BaseController;
-import ${package}.${dao}.${name}Mapper;
-import ${package}.model.api.R;
-import ${package}.${entity}.${name};
-import ${package}.model.vo.SearchVo;
-import ${package}.${serviceImpl}.${name}ServiceImpl;
+import com.chen.controller.base.BaseController;
+import com.chen.mapper.UmsAdminMapper;
+import com.chen.model.api.R;
+import com.chen.model.entity.UmsAdmin;
+import com.chen.model.vo.SearchVo;
+import com.chen.service.impl.UmsAdminServiceImpl;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.validation.annotation.Validated;
@@ -14,25 +14,25 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
-* @author chenwh3
-*/
+ * @author chenwh3
+ */
 @RestController
-@RequestMapping("")
+@RequestMapping("/ums/admin/")
 @Api(value = "", tags = "")
-public class ${name}Controller extends BaseController<${name}ServiceImpl, ${name}Mapper, ${name}> {
+public class UmsAdminController extends BaseController<UmsAdminServiceImpl, UmsAdminMapper, UmsAdmin> {
 
 
-@Override
-@ApiOperation(value = "批量保存", notes = "批量保存")
-@PostMapping("/batchAdd")
-public R batchAdd(@RequestBody List<${name}> list) {
+    @Override
+    @ApiOperation(value = "批量保存", notes = "批量保存")
+    @PostMapping("/batchAdd")
+    public R batchAdd(@RequestBody List<UmsAdmin> list) {
         return super.batchAdd(list);
     }
 
     @Override
     @ApiOperation(value = "更新", notes = "删除")
     @PostMapping("/update")
-    public R update(@RequestBody ${name} obj) {
+    public R update(@RequestBody UmsAdmin obj) {
         return super.update(obj);
     }
 
