@@ -5,7 +5,7 @@ import ${package}.${dao}.${name}Mapper;
 import ${package}.model.api.R;
 import ${package}.${entity}.${name};
 import ${package}.model.vo.SearchVo;
-import ${package}.${serviceImpl}.${name}ServiceImpl;
+import ${package}.${serviceImpl}.BaseServiceImpl;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.validation.annotation.Validated;
@@ -19,7 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("")
 @Api(value = "", tags = "")
-public class ${name}Controller extends BaseController<${name}ServiceImpl, ${name}Mapper, ${name}> {
+public class ${name}Controller extends BaseController<BaseServiceImpl, ${name}Mapper, ${name}> {
 
 
 @Override
