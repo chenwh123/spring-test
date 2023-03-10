@@ -86,4 +86,7 @@ logging:
     com.chen.mapper: INFO
 #    path: ./applogs/admin
 
+base:
+  temp: 123
+
 
