@@ -30,7 +30,7 @@ public class TestController  {
 
     @PostMapping("/test")
     public R test() {
-        return R.data(apiInf.test());
+        return R.data(apiInf.test(null));
     }
 
 

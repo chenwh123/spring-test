@@ -1,5 +1,8 @@
 package com.chen.utils;
 
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.DefaultSingletonBeanRegistry;
 import org.springframework.context.ApplicationContext;
@@ -11,9 +14,11 @@ import java.lang.reflect.Field;
 import java.util.Map;
 
 @Component
-public class SpringUtils implements ApplicationContextAware {
+public class SpringUtils implements ApplicationContextAware , BeanFactoryPostProcessor {
 
     private static ApplicationContext applicationContext = null;
+
+    private static ConfigurableListableBeanFactory beanFactory = null;
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) {
@@ -40,6 +45,14 @@ public class SpringUtils implements ApplicationContextAware {
         singletonObjects.setAccessible(true);
         Map<String, Object> map = (Map<String, Object>) singletonObjects.get(beanFactory);
         map.put(beanName, targetObj);
+    }
+
+    public static String resolveString(String s){
+        return beanFactory.resolveEmbeddedValue(s);
+    }
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
+        SpringUtils.beanFactory = configurableListableBeanFactory;
     }
 }
 

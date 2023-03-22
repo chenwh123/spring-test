@@ -89,4 +89,4 @@ logging:
 base:
   temp: 123
 
-
+  qmsApi: http://localhost:9090/qms

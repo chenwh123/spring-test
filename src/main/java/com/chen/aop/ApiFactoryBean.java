@@ -7,7 +7,7 @@ import org.springframework.beans.factory.FactoryBean;
  * @author chenwh3
  */
 @NoArgsConstructor
-public class ApiProxyFactory<T> implements FactoryBean<T> {
+public class ApiFactoryBean<T> implements FactoryBean<T> {
 
 
 
