@@ -18,6 +18,6 @@ public interface ApiInf {
     @QmsReq(method = Method.POST, url = "${base.qmsApi}", path = "/oriPakProducer/search", raw = true)
     JSONObject test1(RequestBody requestBody);
 
-    @QmsReq(method = Method.POST, url = "${base.qmsApi}", path = "/oriPakProducer/search", raw = true)
+    @QmsReq(method = Method.POST, url = "${base.qmsApi}", path = "/oriPakProducer/search", raw = true, header = {"abc:${base.temp}"})
     void test2(RequestBody requestBody);
 }

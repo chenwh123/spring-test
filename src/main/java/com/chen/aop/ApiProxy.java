@@ -84,7 +84,7 @@ public class ApiProxy implements InvocationHandler {
             if (headers.length == 0) {
                 throw new HttpException("header 格式有误,请使用 key:value的格式");
             }
-            headerMap.put(headers[0].trim(), headers[1].trim());
+            headerMap.put(SpringUtils.resolveString(headers[0]).trim(), SpringUtils.resolveString(headers[1]).trim());
         }
 
 
