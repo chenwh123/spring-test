@@ -53,9 +53,10 @@ public class ApiProxy implements InvocationHandler {
         Parameter[] parameters = method.getParameters();
         boolean raw = qmsReq.raw();
         String url = SpringUtils.resolveString(StrUtil.firstNonBlank(qmsReq.url(), qmsApi.url()));
-        String path = qmsReq.path();
+        String path = SpringUtils.resolveString(qmsReq.path());
         String fullPath = URLUtil.normalize(StrUtil.format("{}/{}", url, path));
         cn.hutool.http.Method httpMethod = qmsReq.method();
+        //处理body
         String body = "";
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < parameters.length; i++) {
@@ -77,7 +78,6 @@ public class ApiProxy implements InvocationHandler {
         log.info("send request method = {} , url = {} , body = {} ",httpMethod.name(), fullPath, body);
         body = StrUtil.removeSuffix(body, "&");
         // 处理header
-
         Map<String, String> headerMap = new HashMap<>(defaultHeaders);
         for (String headerStr: qmsReq.header()){
             String[] headers = headerStr.split(":");
