@@ -1,5 +1,6 @@
 package com.chen.controller;
 
+import cn.hutool.core.util.TypeUtil;
 import com.chen.api.ApiInf;
 import com.chen.controller.base.BaseController;
 import com.chen.mapper.UmsAdminMapper;
@@ -30,7 +31,9 @@ public class TestController  {
 
     @PostMapping("/test")
     public R test() {
-        return R.data(apiInf.test(null));
+//        return R.data(apiInf.test(null));
+        apiInf.test2(null);
+        return null;
     }
 
 

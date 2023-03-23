@@ -20,4 +20,16 @@ public @interface QmsReq {
     Method method() default Method.GET;
     String url() default "";
     String path() default "";
+
+    boolean raw() default false;
+
+    /**
+     * 超时时间/s
+     */
+    int timeout() default 30;
+
+    String[] header() default {};
+
+    String dataKey() default "data";
+    String[] msgKey() default {"msg","message"};
 }

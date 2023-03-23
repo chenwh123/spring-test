@@ -12,6 +12,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 @QmsApi
 public interface ApiInf {
 
-    @QmsReq(method = Method.POST, url = "${base.qmsApi}",path = "/oriPakProducer/search")
+    @QmsReq(method = Method.POST, url = "${base.qmsApi}", path = "/oriPakProducer/search")
     JSONObject test(RequestBody requestBody);
+
+    @QmsReq(method = Method.POST, url = "${base.qmsApi}", path = "/oriPakProducer/search", raw = true)
+    JSONObject test1(RequestBody requestBody);
+
+    @QmsReq(method = Method.POST, url = "${base.qmsApi}", path = "/oriPakProducer/search", raw = true)
+    void test2(RequestBody requestBody);
 }
