@@ -6,11 +6,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.FieldFill;
+import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
 @Data
 @TableName("ums_admin")
+@NoArgsConstructor
 public class UmsAdmin {
 
     private static final long serialVersionUID = 1L;
