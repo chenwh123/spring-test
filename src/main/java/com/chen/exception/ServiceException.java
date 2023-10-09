@@ -33,8 +33,6 @@ public class ServiceException extends RuntimeException {
 
     /**
      * 提高性能
-     *
-     * @return Throwable
      */
     @Override
     public Throwable fillInStackTrace() {
