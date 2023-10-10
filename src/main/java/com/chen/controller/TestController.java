@@ -1,25 +1,16 @@
 package com.chen.controller;
 
-import cn.hutool.core.util.TypeUtil;
 import com.chen.api.ApiInf;
-import com.chen.controller.base.BaseController;
 import com.chen.interceptor.aspect.loggerprefix.LoggerPrefix;
-import com.chen.interceptor.aspect.loggerprefix.LoggerPrefixHolder;
-import com.chen.mapper.UmsAdminMapper;
 import com.chen.model.api.R;
-import com.chen.model.entity.UmsAdmin;
-import com.chen.model.vo.SearchVo;
-import com.chen.service.impl.UmsAdminServiceImpl;
+import com.chen.service.TestRedisService;
 import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
-import java.util.List;
 
 /**
  * @author chenwh3
@@ -28,17 +19,19 @@ import java.util.List;
 @RequestMapping("/test/")
 @Api(value = "", tags = "")
 @Slf4j
+@LoggerPrefix(showMethod = true)
 public class TestController  {
 
     @Resource
     private ApiInf apiInf;
 
-    @PostMapping("/test")
-    @LoggerPrefix
-    public R test() {
-//        return R.data(apiInf.test(null));
-        log.info("1234");
+    @Resource
+    private TestRedisService redisService;
 
+    @PostMapping("/test")
+    public R test() {
+        redisService.lock();
+        log.info("1234");
         return null;
     }
 

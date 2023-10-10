@@ -20,9 +20,13 @@ import org.springframework.stereotype.Component;
 @Order(-200)
 public class LoggerPrefixAspect {
 
-    @Around("@annotation(com.chen.interceptor.aspect.loggerprefix.LoggerPrefix)")
+    @Around("@annotation(com.chen.interceptor.aspect.loggerprefix.LoggerPrefix) || @within(com.chen.interceptor.aspect.loggerprefix.LoggerPrefix)")
     public Object around(ProceedingJoinPoint pjp) throws Throwable{
         LoggerPrefix loggerPrefix = ((MethodSignature)pjp.getSignature()).getMethod().getAnnotation(LoggerPrefix.class);
+        if(loggerPrefix == null){
+            loggerPrefix = pjp.getTarget().getClass().getAnnotation(LoggerPrefix.class);
+        }
+        boolean showMethod = loggerPrefix.showMethod();
         int i = 0;
         if (StrUtil.isNotBlank(loggerPrefix.value())) {
             LoggerPrefixHolder.push(loggerPrefix.value());
@@ -33,8 +37,14 @@ public class LoggerPrefixAspect {
             i++;
         }
         try {
+            if (showMethod) {
+                log.info("{}.{}() start", pjp.getTarget().getClass().getSimpleName(), pjp.getSignature().getName());
+            }
             return pjp.proceed();
         } finally {
+            if (showMethod) {
+                log.info("{}.{}() end", pjp.getTarget().getClass().getSimpleName(), pjp.getSignature().getName());
+            }
             while ((i = i - 1) >= 0) {
                 LoggerPrefixHolder.poll();
             }
