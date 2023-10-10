@@ -12,7 +12,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-public class MapUtils {
+/**
+ * @author chenwh3
+ */
+public class MapUtil {
 
     /**
      * list根据某个字段转map
