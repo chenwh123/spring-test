@@ -1,4 +1,4 @@
-package com.chen.aop;
+package com.chen.aop.api;
 
 import lombok.NoArgsConstructor;
 import org.springframework.beans.factory.FactoryBean;

@@ -1,5 +1,6 @@
 package com.chen.utils;
 
+import cn.hutool.core.util.StrUtil;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -47,12 +48,25 @@ public class SpringUtils implements ApplicationContextAware , BeanFactoryPostPro
         map.put(beanName, targetObj);
     }
 
-    public static String resolveString(String s){
-        return beanFactory.resolveEmbeddedValue(s);
-    }
     @Override
     public void postProcessBeanFactory(ConfigurableListableBeanFactory configurableListableBeanFactory) throws BeansException {
         SpringUtils.beanFactory = configurableListableBeanFactory;
+    }
+
+
+    public static String resolveString(String s){
+        return beanFactory.resolveEmbeddedValue(s);
+    }
+
+    public static String resolveEl(String s){
+        return resolveEl(s, null);
+    }
+
+    public static String resolveEl(String s,  Map<String,Object> context){
+        if (StrUtil.isBlank(s)) {
+            return s;
+        }
+        return SpelUtils.parseStr(beanFactory.resolveEmbeddedValue(s), context);
     }
 }
 
