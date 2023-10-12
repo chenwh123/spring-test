@@ -8,6 +8,8 @@ import org.redisson.client.RedisClient;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -36,6 +38,14 @@ public class TestRedisService {
             rlock.unlock();
             rlock.unlock();
         }
+    }
+
+    public static void main(String[] args) throws ExecutionException, InterruptedException {
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        future.complete(1);
+
+        System.out.println(future.get());
+
     }
 
 
