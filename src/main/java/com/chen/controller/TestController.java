@@ -1,8 +1,9 @@
 package com.chen.controller;
 
+
 import com.chen.api.ApiInf;
 import com.chen.interceptor.aspect.loggerprefix.LoggerPrefix;
-import com.chen.model.api.R;
+import com.chen.jatool.common.modal.api.R;
 import com.chen.service.TestRedisService;
 import io.swagger.annotations.Api;
 import lombok.extern.slf4j.Slf4j;

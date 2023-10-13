@@ -1,8 +1,9 @@
 package com.chen.controller;
 
+
 import com.chen.controller.base.BaseController;
+import com.chen.jatool.common.modal.api.R;
 import com.chen.mapper.UmsAdminMapper;
-import com.chen.model.api.R;
 import com.chen.model.entity.UmsAdmin;
 import com.chen.model.vo.SearchVo;
 import com.chen.service.impl.UmsAdminServiceImpl;
