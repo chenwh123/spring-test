@@ -1,0 +1,39 @@
+title AQS时序图 ， 获取资源
+
+actor thread
+participant resource poll
+
+participant fields
+
+participant waitList
+
+alt resource enough
+  autoactivation on
+
+  thread->resource poll:try get resource
+  resource poll->fields: cas
+  resource poll<--fields: success
+  thread<--resource poll: success
+
+
+  autoactivation off
+  autonumber off
+
+
+
+else no resource
+
+autonumber 1
+autoactivation on
+
+  thread->resource poll: try get resource
+      resource poll->fields:cas
+      resource poll<--fields: failed
+  thread<--resource poll: failed
+  thread->waitList:enter list
+
+
+autoactivation off
+autonumber off
+
+end

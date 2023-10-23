@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 
+
 /**
  * @author chenwh3
  */
@@ -34,6 +35,13 @@ public class TestController  {
         redisService.lock();
         log.info("1234");
         return null;
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+
+
+
+
     }
 
 
