@@ -1,5 +1,7 @@
 title AQS时序图 ， 获取资源
 
+
+
 actor thread
 participant resource poll
 
@@ -31,9 +33,21 @@ autoactivation on
       resource poll<--fields: failed
   thread<--resource poll: failed
   thread->waitList:enter list
+  note over waitList: try push and init list
+  loop 1==1
+    alt success
+    waitList->waitList: retry get resource
+    waitList-->thread:success
+    else failed
+    waitList->waitList: retry get resource
+    waitList-->waitList: failed
+    end
+  end
+
 
 
 autoactivation off
 autonumber off
+
 
 end
