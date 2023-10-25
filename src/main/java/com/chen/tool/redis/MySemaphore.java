@@ -146,7 +146,9 @@ public class MySemaphore {
      * if failed , block the thread
      */
     public void doAcquire(int num) {
-        //        add(Thread.currentThread());
+        Node node = new Node(Thread.currentThread());
+        addNode(node);
+
         while (true) {
 
         }
