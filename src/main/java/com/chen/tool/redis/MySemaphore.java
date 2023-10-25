@@ -4,6 +4,7 @@ package com.chen.tool.redis;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,12 +36,12 @@ public class MySemaphore {
     }
 
     @Data
-    private static class List{
+    private static class List {
 
-        private  AtomicReference<Node> head;
-        private  AtomicReference<Node> tail;
+        private AtomicReference<Node> head;
+        private AtomicReference<Node> tail;
 
-        public  List init(){
+        public List init() {
             List list = new List();
             list.head = new AtomicReference<>();
             list.tail = new AtomicReference<>();
@@ -53,9 +54,9 @@ public class MySemaphore {
         /**
          * use cas
          */
-        public void add(Node node){
-            Node tailNode = tail.get();
+        public void addTail(Node node) {
             while (true) {
+                Node tailNode = tail.get();
                 if (tail.compareAndSet(tailNode, node)) {
                     tailNode.next = node;
                     node.prev = tailNode;
@@ -64,17 +65,15 @@ public class MySemaphore {
             }
         }
 
-        public void removeHead(){
-            Node headNode = head.get();
-            while (true) {
-                if (head.compareAndSet(headNode, headNode.next)) {
-                    headNode.next.prev = null;
-                    headNode.next = null;
-                    break;
-                }
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            Node node = head.get();
+            while (node != null) {
+                sb.append(node.thread.getName()).append("->");
+                node = node.next;
             }
+            return sb.toString();
         }
-
     }
 
     /**
@@ -112,12 +111,18 @@ public class MySemaphore {
     }
 
     public static void test2() throws InterruptedException {
-        Semaphore semaphore = new Semaphore(1);
-        for (int i = 0; i < 10; i++) {
-            semaphore.acquire(11);
+        Semaphore semaphore = new Semaphore(0);
+        CompletableFuture.runAsync(()->{
+            try {
+                semaphore.acquire(1);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
 
-            semaphore.release(1);
-        }
+        });
+
+
+        System.out.println(123);
     }
 
     public static void main(String[] args) throws InterruptedException {
