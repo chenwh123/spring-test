@@ -1,6 +1,7 @@
 package com.chen.tool.redis;
 
 
+import cn.hutool.core.date.TimeInterval;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.invoke.MethodHandles;
@@ -10,7 +11,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 
 
 /**
@@ -19,10 +20,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class MySemaphore {
 
-    private AtomicInteger permits = new AtomicInteger();
+    private Integer permits = 0;
 
     MySemaphore(int num) {
-        permits.set(num);
+        permits = num;
     }
 
     private static final class Node {
@@ -69,11 +70,14 @@ public class MySemaphore {
 
     private static final VarHandle TAIL;
 
+    private static final VarHandle PERMIT;
+
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
             HEAD = l.findVarHandle(MySemaphore.class, "head", Node.class);
             TAIL = l.findVarHandle(MySemaphore.class, "tail", Node.class);
+            PERMIT = l.findVarHandle(MySemaphore.class, "permits", Integer.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -85,6 +89,10 @@ public class MySemaphore {
 
     public boolean compareAndSetTail(Node expect, Node update) {
         return TAIL.compareAndSet(this, expect, update);
+    }
+
+    public boolean compareAndSetPermit(Integer expect, Integer update) {
+        return PERMIT.compareAndSet(this, expect, update);
     }
 
     public void initList() {
@@ -134,35 +142,86 @@ public class MySemaphore {
      */
     public int tryAcquire(int num) {
         while (true) {
-            int permit = permits.get();
+            int permit = permits;
             int remain = permit - num;
-            if (remain < 0 || permits.compareAndSet(permit, remain)) {
+            if (remain < 0 || compareAndSetPermit(permit, remain)) {
                 return remain;
             }
         }
     }
 
     /**
+     * FIFO
+     * try to get resource
      * if failed , block the thread
      */
     public void doAcquire(int num) {
+        // first , add to list
         Node node = new Node(Thread.currentThread());
         addNode(node);
-
         while (true) {
+            // FIFO
+            Node prev = node.prev;
+            if (prev == head) {
+                int remain = tryAcquire(num);
+                if (remain >= 0) {
+                    removeHead();
+                    if (remain != 0) {
+                        // try to wake up other thread
+                        doRelease();
+                    }
+                    return;
+                }
+            } else {
+                tryStopNode(node);
+            }
 
         }
+    }
+
+    private void removeHead() {
+        Node oldHead = head;
+        Node newHead = head.next;
+        if (compareAndSetHead(oldHead, newHead)) {
+            oldHead.next = null;
+            newHead.prev = null;
+            newHead.thread = null;
+        }
+    }
+
+
+    public void tryStopNode(Node node) {
+        LockSupport.park(node.thread);
     }
 
     /**
      * try to wake up a thread to doAcquire
      */
     public void doRelease() {
+        Node node = head.next;
+        if (node != null) {
+            LockSupport.unpark(node.thread);
+        }
+    }
 
+    public int tryRelease(int num) {
+        while (true) {
+            int permit = permits;
+            int remain = permit + num;
+            if (compareAndSetPermit(permit, remain)) {
+                return remain;
+            }
+        }
+    }
+
+    public int availablePermits(){
+        return permits;
     }
 
     public void release(int num) {
-
+        if (tryRelease(num) > 0) {
+            doRelease();
+        }
     }
 
     public static void test1() throws InterruptedException {
@@ -200,7 +259,7 @@ public class MySemaphore {
     public static void test3() {
         MySemaphore mySemaphore = new MySemaphore(5);
         List<CompletableFuture> list = new ArrayList<>();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 10; i++) {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 mySemaphore.addNode(new Node(Thread.currentThread()));
             });
@@ -210,7 +269,36 @@ public class MySemaphore {
         System.out.println(mySemaphore);
     }
 
+    public static void test4(){
+        MySemaphore mySemaphore = new MySemaphore(5);
+        for (int i = 0; i < 10; i++) {
+            CompletableFuture.runAsync(() -> {
+                mySemaphore.acquire(2);
+                System.out.println("aqcuire , remain = " + mySemaphore.availablePermits());
+                try {
+                    TimeUnit.SECONDS.sleep(1);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                mySemaphore.release(2);
+            });
+        }
+
+
+        System.out.println(mySemaphore.availablePermits());
+
+        try {
+            TimeUnit.SECONDS.sleep(10);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        System.out.println(mySemaphore.availablePermits());
+
+
+    }
+
     public static void main(String[] args) throws InterruptedException {
-        test3();
+        test4();
     }
 }
