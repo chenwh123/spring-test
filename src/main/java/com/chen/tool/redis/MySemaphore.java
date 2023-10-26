@@ -1,7 +1,6 @@
 package com.chen.tool.redis;
 
 
-import cn.hutool.core.date.TimeInterval;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.invoke.MethodHandles;
@@ -270,16 +269,12 @@ public class MySemaphore {
     }
 
     public static void test4(){
-        MySemaphore mySemaphore = new MySemaphore(5);
-        for (int i = 0; i < 10; i++) {
+        MySemaphore mySemaphore = new MySemaphore(6);
+        for (int i = 0; i < 100; i++) {
             CompletableFuture.runAsync(() -> {
                 mySemaphore.acquire(2);
                 System.out.println("aqcuire , remain = " + mySemaphore.availablePermits());
-                try {
-                    TimeUnit.SECONDS.sleep(1);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+
                 mySemaphore.release(2);
             });
         }
@@ -288,7 +283,7 @@ public class MySemaphore {
         System.out.println(mySemaphore.availablePermits());
 
         try {
-            TimeUnit.SECONDS.sleep(10);
+            TimeUnit.SECONDS.sleep(4);
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
