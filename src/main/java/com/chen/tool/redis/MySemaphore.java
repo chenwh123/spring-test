@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.BiConsumer;
 
 
 /**
@@ -124,7 +125,7 @@ public class MySemaphore {
             node = node.next;
             i++;
         }
-        return "size = " + i +"," + sb.toString();
+        return "size = " + i + "," + sb.toString();
     }
 
     /**
@@ -213,7 +214,7 @@ public class MySemaphore {
         }
     }
 
-    public int availablePermits(){
+    public int availablePermits() {
         return permits;
     }
 
@@ -268,19 +269,21 @@ public class MySemaphore {
         System.out.println(mySemaphore);
     }
 
-    public static void test4(){
-        MySemaphore mySemaphore = new MySemaphore(6);
+    public static void test4() {
+        MySemaphore mySemaphore = new MySemaphore(10);
         for (int i = 0; i < 100; i++) {
+            final int acquire = (i + 1) % 4;
             CompletableFuture.runAsync(() -> {
-                mySemaphore.acquire(2);
-                System.out.println("aqcuire , remain = " + mySemaphore.availablePermits());
+                try {
+                    mySemaphore.acquire(acquire);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                System.out.println("aqcuire = " + acquire + " , remain = " + mySemaphore.availablePermits());
 
-                mySemaphore.release(2);
+                mySemaphore.release(acquire);
             });
         }
-
-
-        System.out.println(mySemaphore.availablePermits());
 
         try {
             TimeUnit.SECONDS.sleep(4);
@@ -289,11 +292,49 @@ public class MySemaphore {
         }
 
         System.out.println(mySemaphore.availablePermits());
-
-
     }
 
-    public static void main(String[] args) throws InterruptedException {
-        test4();
+    public static void test5() throws Exception {
+
+        Semaphore mySemaphore = new Semaphore(0);
+
+        BiConsumer<Integer,Integer> runTask = (num, timeout) -> {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    System.out.println("try acquire =" + num);
+                    mySemaphore.acquire(num);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                try {
+                    TimeUnit.SECONDS.sleep(timeout);
+                } catch (InterruptedException e) {
+                }
+                System.out.println("aqcuire = " + num + " , remain = " + mySemaphore.availablePermits());
+
+                mySemaphore.release(num);
+            });
+        };
+
+
+        runTask.accept(6,1);
+        TimeUnit.MILLISECONDS.sleep(50);
+        runTask.accept(1, 1);
+        TimeUnit.SECONDS.sleep(1);
+        mySemaphore.release(2);
+
+
+        try {
+            TimeUnit.SECONDS.sleep(4);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        System.out.println(mySemaphore.availablePermits());
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        test5();
     }
 }
