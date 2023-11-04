@@ -295,6 +295,7 @@ public class MySemaphore {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        test4();
+        Semaphore semaphore = new Semaphore(10);
+        semaphore.tryAcquire(2, 1, TimeUnit.SECONDS);
     }
 }
