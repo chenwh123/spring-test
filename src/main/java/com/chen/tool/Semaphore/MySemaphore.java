@@ -1,4 +1,4 @@
-package com.chen.tool.redis;
+package com.chen.tool.Semaphore;
 
 
 import lombok.extern.slf4j.Slf4j;

@@ -1,4 +1,4 @@
-package com.chen.tool.redis;
+package com.chen.tool.Semaphore;
 
 
 public abstract class AbstractSemaphore {

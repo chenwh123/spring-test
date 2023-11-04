@@ -1,4 +1,4 @@
-package com.chen.tool.redis;
+package com.chen.tool.Semaphore;
 
 
 import java.util.concurrent.atomic.AtomicInteger;
