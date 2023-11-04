@@ -100,7 +100,7 @@ public class MySemaphore {
         }
     }
 
-    public void addNode(Node node) {
+    public void addLast(Node node) {
         while (true) {
             if (tail == null) {
                 initList();
@@ -110,6 +110,19 @@ public class MySemaphore {
                     tail = node;
                     return;
                 }
+            }
+        }
+    }
+
+    public void removeHead() {
+        while (true) {
+            Node oldHead = head;
+            Node newHead = head.next;
+            if (compareAndSetHead(oldHead, newHead)) {
+                oldHead.next = null;
+                newHead.prev = null;
+                newHead.thread = null;
+                return;
             }
         }
     }
@@ -124,17 +137,10 @@ public class MySemaphore {
             node = node.next;
             i++;
         }
-        return "size = " + i +"," + sb.toString();
+        return "size = " + i + "," + sb.toString();
     }
 
-    /**
-     * use compare and set , if failed , retry
-     */
-    public void acquire(int num) {
-        if (tryAcquire(num) < 0) {
-            doAcquire(num);
-        }
-    }
+
 
     /**
      * cas , return to remain
@@ -150,6 +156,15 @@ public class MySemaphore {
     }
 
     /**
+     * use compare and set , if failed , retry
+     */
+    public void acquire(int num) {
+        if (tryAcquire(num) < 0) {
+            doAcquire(num);
+        }
+    }
+
+    /**
      * FIFO
      * try to get resource
      * if failed , block the thread
@@ -157,7 +172,7 @@ public class MySemaphore {
     public void doAcquire(int num) {
         // first , add to list
         Node node = new Node(Thread.currentThread());
-        addNode(node);
+        addLast(node);
         while (true) {
             // FIFO
             Node prev = node.prev;
@@ -174,20 +189,8 @@ public class MySemaphore {
             } else {
                 tryStopNode(node);
             }
-
         }
     }
-
-    private void removeHead() {
-        Node oldHead = head;
-        Node newHead = head.next;
-        if (compareAndSetHead(oldHead, newHead)) {
-            oldHead.next = null;
-            newHead.prev = null;
-            newHead.thread = null;
-        }
-    }
-
 
     public void tryStopNode(Node node) {
         LockSupport.park(node.thread);
@@ -203,6 +206,12 @@ public class MySemaphore {
         }
     }
 
+    public void release(int num) {
+        if (tryRelease(num) > 0) {
+            doRelease();
+        }
+    }
+
     public int tryRelease(int num) {
         while (true) {
             int permit = permits;
@@ -213,15 +222,10 @@ public class MySemaphore {
         }
     }
 
-    public int availablePermits(){
+    public int availablePermits() {
         return permits;
     }
 
-    public void release(int num) {
-        if (tryRelease(num) > 0) {
-            doRelease();
-        }
-    }
 
     public static void test1() throws InterruptedException {
         Semaphore mySemaphore = new Semaphore(5);
@@ -260,7 +264,7 @@ public class MySemaphore {
         List<CompletableFuture> list = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                mySemaphore.addNode(new Node(Thread.currentThread()));
+                mySemaphore.addLast(new Node(Thread.currentThread()));
             });
             list.add(future);
         }
@@ -268,7 +272,7 @@ public class MySemaphore {
         System.out.println(mySemaphore);
     }
 
-    public static void test4(){
+    public static void test4() {
         MySemaphore mySemaphore = new MySemaphore(6);
         for (int i = 0; i < 100; i++) {
             CompletableFuture.runAsync(() -> {
@@ -279,7 +283,6 @@ public class MySemaphore {
             });
         }
 
-
         System.out.println(mySemaphore.availablePermits());
 
         try {
@@ -289,8 +292,6 @@ public class MySemaphore {
         }
 
         System.out.println(mySemaphore.availablePermits());
-
-
     }
 
     public static void main(String[] args) throws InterruptedException {
