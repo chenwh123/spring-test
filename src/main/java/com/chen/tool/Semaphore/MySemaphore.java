@@ -1,6 +1,7 @@
 package com.chen.tool.Semaphore;
 
 
+import io.netty.util.concurrent.FastThreadLocal;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.invoke.MethodHandles;
@@ -284,6 +285,7 @@ public class MySemaphore {
         }
 
         System.out.println(mySemaphore.availablePermits());
+        FastThreadLocal<String> fastThreadLocal = new FastThreadLocal<>();
 
         try {
             TimeUnit.SECONDS.sleep(4);
