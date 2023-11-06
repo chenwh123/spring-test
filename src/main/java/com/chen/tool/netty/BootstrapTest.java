@@ -11,11 +11,12 @@ import io.netty.util.internal.InternalThreadLocalMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 public class BootstrapTest {
 
-    public static void test1() throws Exception{
+    public static void test1() throws Exception {
         Bootstrap bootstrap = new Bootstrap();
         NioEventLoopGroup eventExecutors = new NioEventLoopGroup();
 
@@ -30,7 +31,7 @@ public class BootstrapTest {
     public static FastThreadLocal<String> stringFastThreadLocal = new FastThreadLocal<>();
 
 
-    public static void test2() throws Exception{
+    public static void test2() throws Exception {
         DefaultThreadFactory threadFactory = new DefaultThreadFactory(BootstrapTest.class);
         for (int i = 0; i < 40; i++) {
             final int finalI = i;
@@ -40,70 +41,73 @@ public class BootstrapTest {
                 try {
                     stringFastThreadLocal.set(finalI + "-");
                     if (Thread.currentThread() instanceof FastThreadLocalThread) {
-                        FastThreadLocalThread thread = (FastThreadLocalThread)Thread.currentThread();
+                        FastThreadLocalThread thread = (FastThreadLocalThread) Thread.currentThread();
                         InternalThreadLocalMap map = thread.threadLocalMap();
                     }
                     TimeUnit.SECONDS.sleep(1);
                 } catch (InterruptedException e) {
                 }
-                System.out.println(Thread.currentThread().getName() + "" + Thread.currentThread().getThreadGroup() + " finish") ;
+                System.out.println(Thread.currentThread().getName() + "" + Thread.currentThread().getThreadGroup() + " finish");
             }).start();
         }
         TimeUnit.SECONDS.sleep(5);
     }
 
-    public static void test3() throws Exception{
-        int loopTimes = 10000;
+    public static void test3() throws Exception {
+        int loopTimes = 10000000;
         long currTime = System.currentTimeMillis();
         System.out.println(currTime);
+        int getTimes = 1000;
 
-        List<Thread> threads = new ArrayList<>(10000);
-        for (int i = 0; i < loopTimes; i++) {
-            Integer finalI = i;
-            ThreadLocal<Object> local = new ThreadLocal<>();
-            Thread thread = new Thread(() -> {
+        AtomicLong sum = new AtomicLong(0);
+        Thread thread = new Thread(()->{
+            for (int i = 0; i < loopTimes; i++) {
+                Integer finalI = i;
+                ThreadLocal<Integer> local = new ThreadLocal<>();
                 local.set(finalI);
                 if (finalI % 7 == 0) {
                     local.remove();
                 }
-                System.out.println("i = " + finalI + ", local = " + local.get());
-            });
-            threads.add(thread);
-            thread.start();
-        }
+                for (int j = 0; j < getTimes; j++) {
+                    Integer res = local.get();
+                    sum.addAndGet(res == null ? 0 : res);
+                }
+            }
+        });
+        thread.start();
+        thread.join();
 
-        for (Thread thread : threads) {
-            thread.join();
-        }
+        System.out.println(sum.get());
 
         long consumeTime = System.currentTimeMillis() - currTime;
         System.out.println("consumeTime " + consumeTime);
     }
 
 
-    public static void test4() throws Exception{
-        int loopTimes = 10000;
+    public static void test4() throws Exception {
+        int loopTimes = 10000000;
         long currTime = System.currentTimeMillis();
         System.out.println(currTime);
+        int getTimes = 1000;
 
-        List<Thread> threads = new ArrayList<>(10000);
-        for (int i = 0; i < loopTimes; i++) {
-            Integer finalI = i;
-            FastThreadLocal<Object> local = new FastThreadLocal<>();
-            Thread thread = new FastThreadLocalThread(() -> {
+        AtomicLong sum = new AtomicLong();
+        Thread thread = new FastThreadLocalThread(()->{
+            for (int i = 0; i < loopTimes; i++) {
+                Integer finalI = i;
+                FastThreadLocal<Integer> local = new FastThreadLocal<>();
                 local.set(finalI);
                 if (finalI % 7 == 0) {
                     local.remove();
                 }
-                System.out.println("i = " + finalI + ", local = " + local.get());
-            });
-            threads.add(thread);
-            thread.start();
-        }
-
-        for (Thread thread : threads) {
-            thread.join();
-        }
+                for (int j = 0; j < getTimes; j++) {
+                    Integer res = local.get();
+                    sum.addAndGet(res == null ? 0 : res);
+                }
+            }
+        });
+        thread.start();
+        thread.join();
+        System.out.println(sum.get());
 
         long consumeTime = System.currentTimeMillis() - currTime;
         System.out.println("consumeTime " + consumeTime);
