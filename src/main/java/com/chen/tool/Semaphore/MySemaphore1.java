@@ -1,4 +1,4 @@
-package com.chen.tool.redis;
+package com.chen.tool.Semaphore;
 
 
 public class MySemaphore1 extends AbstractSemaphore {
@@ -7,7 +7,11 @@ public class MySemaphore1 extends AbstractSemaphore {
 
     @Override
     int tryAcquire(int num) {
-        return (permits = permits - num);
+        int remain = permits - num;
+        if (remain > 0) {
+            permits = remain;
+        }
+        return remain;
     }
 
     @Override

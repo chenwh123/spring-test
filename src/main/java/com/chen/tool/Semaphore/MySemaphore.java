@@ -1,6 +1,7 @@
-package com.chen.tool.redis;
+package com.chen.tool.Semaphore;
 
 
+import io.netty.util.concurrent.FastThreadLocal;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.invoke.MethodHandles;
@@ -11,7 +12,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.BiConsumer;
 
 
 /**
@@ -101,7 +101,7 @@ public class MySemaphore {
         }
     }
 
-    public void addNode(Node node) {
+    public void addLast(Node node) {
         while (true) {
             if (tail == null) {
                 initList();
@@ -111,6 +111,19 @@ public class MySemaphore {
                     tail = node;
                     return;
                 }
+            }
+        }
+    }
+
+    public void removeHead() {
+        while (true) {
+            Node oldHead = head;
+            Node newHead = head.next;
+            if (compareAndSetHead(oldHead, newHead)) {
+                oldHead.next = null;
+                newHead.prev = null;
+                newHead.thread = null;
+                return;
             }
         }
     }
@@ -128,14 +141,7 @@ public class MySemaphore {
         return "size = " + i + "," + sb.toString();
     }
 
-    /**
-     * use compare and set , if failed , retry
-     */
-    public void acquire(int num) {
-        if (tryAcquire(num) < 0) {
-            doAcquire(num);
-        }
-    }
+
 
     /**
      * cas , return to remain
@@ -151,6 +157,15 @@ public class MySemaphore {
     }
 
     /**
+     * use compare and set , if failed , retry
+     */
+    public void acquire(int num) {
+        if (tryAcquire(num) < 0) {
+            doAcquire(num);
+        }
+    }
+
+    /**
      * FIFO
      * try to get resource
      * if failed , block the thread
@@ -158,7 +173,7 @@ public class MySemaphore {
     public void doAcquire(int num) {
         // first , add to list
         Node node = new Node(Thread.currentThread());
-        addNode(node);
+        addLast(node);
         while (true) {
             // FIFO
             Node prev = node.prev;
@@ -175,20 +190,8 @@ public class MySemaphore {
             } else {
                 tryStopNode(node);
             }
-
         }
     }
-
-    private void removeHead() {
-        Node oldHead = head;
-        Node newHead = head.next;
-        if (compareAndSetHead(oldHead, newHead)) {
-            oldHead.next = null;
-            newHead.prev = null;
-            newHead.thread = null;
-        }
-    }
-
 
     public void tryStopNode(Node node) {
         LockSupport.park(node.thread);
@@ -201,6 +204,12 @@ public class MySemaphore {
         Node node = head.next;
         if (node != null) {
             LockSupport.unpark(node.thread);
+        }
+    }
+
+    public void release(int num) {
+        if (tryRelease(num) > 0) {
+            doRelease();
         }
     }
 
@@ -218,11 +227,6 @@ public class MySemaphore {
         return permits;
     }
 
-    public void release(int num) {
-        if (tryRelease(num) > 0) {
-            doRelease();
-        }
-    }
 
     public static void test1() throws InterruptedException {
         Semaphore mySemaphore = new Semaphore(5);
@@ -261,7 +265,7 @@ public class MySemaphore {
         List<CompletableFuture> list = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                mySemaphore.addNode(new Node(Thread.currentThread()));
+                mySemaphore.addLast(new Node(Thread.currentThread()));
             });
             list.add(future);
         }
@@ -270,20 +274,18 @@ public class MySemaphore {
     }
 
     public static void test4() {
-        MySemaphore mySemaphore = new MySemaphore(10);
+        MySemaphore mySemaphore = new MySemaphore(6);
         for (int i = 0; i < 100; i++) {
-            final int acquire = (i + 1) % 4;
             CompletableFuture.runAsync(() -> {
-                try {
-                    mySemaphore.acquire(acquire);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                System.out.println("aqcuire = " + acquire + " , remain = " + mySemaphore.availablePermits());
+                mySemaphore.acquire(2);
+                System.out.println("aqcuire , remain = " + mySemaphore.availablePermits());
 
-                mySemaphore.release(acquire);
+                mySemaphore.release(2);
             });
         }
+
+        System.out.println(mySemaphore.availablePermits());
+        FastThreadLocal<String> fastThreadLocal = new FastThreadLocal<>();
 
         try {
             TimeUnit.SECONDS.sleep(4);
@@ -294,47 +296,8 @@ public class MySemaphore {
         System.out.println(mySemaphore.availablePermits());
     }
 
-    public static void test5() throws Exception {
-
-        Semaphore mySemaphore = new Semaphore(0);
-
-        BiConsumer<Integer,Integer> runTask = (num, timeout) -> {
-            CompletableFuture.runAsync(() -> {
-                try {
-                    System.out.println("try acquire =" + num);
-                    mySemaphore.acquire(num);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                try {
-                    TimeUnit.SECONDS.sleep(timeout);
-                } catch (InterruptedException e) {
-                }
-                System.out.println("aqcuire = " + num + " , remain = " + mySemaphore.availablePermits());
-
-                mySemaphore.release(num);
-            });
-        };
-
-
-        runTask.accept(6,1);
-        TimeUnit.MILLISECONDS.sleep(50);
-        runTask.accept(1, 1);
-        TimeUnit.SECONDS.sleep(1);
-        mySemaphore.release(2);
-
-
-        try {
-            TimeUnit.SECONDS.sleep(4);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-
-        System.out.println(mySemaphore.availablePermits());
-    }
-
-
-    public static void main(String[] args) throws Exception {
-        test5();
+    public static void main(String[] args) throws InterruptedException {
+        Semaphore semaphore = new Semaphore(10);
+        semaphore.tryAcquire(2, 1, TimeUnit.SECONDS);
     }
 }
