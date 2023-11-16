@@ -111,7 +111,11 @@ public class BootstrapTest {
 
 
     public static void main(String[] args) throws Exception {
-        test4();
+
+        NioEventLoopGroup eventExecutors = new NioEventLoopGroup();
+        eventExecutors.execute(()->{
+            System.out.println(123);
+        });
 
 
     }
