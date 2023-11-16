@@ -33,7 +33,7 @@ public class BaseServiceImpl<M extends BaseMapper<O> ,O> extends ServiceImpl<M, 
 
     /**
      * 获取列和属性的映射关系,仅限注解TableField , 加上内存缓存
-     * 如 :
+     * 1234
      * property : paramName
      * column : param_name
      */
