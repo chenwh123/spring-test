@@ -7,8 +7,6 @@ import java.util.Map;
 
 public class MyThreadLocal1<T> implements AbstractThreadLocal<T> {
 
-
-
     @Override
     public void set(T value) {
         getMap().put(Thread.currentThread(), value);
