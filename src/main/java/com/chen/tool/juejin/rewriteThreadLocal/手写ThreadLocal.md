@@ -5,34 +5,29 @@
 
 # ThreadLocal用法简介
 ## 使用场景
-按我的理解， ThreadLocal只是用户保存上下文的一个工具。
+按我的理解， ThreadLocal只是保存上下文的一个工具。
 就我自己在项目用到的场景
 - 保存当前用户信息； 账号，token等
-- 调用链路；sessionId，traceId等，跨服务调用时，出了问题方便溯源；
+- 记录调用链路；sessionId，traceId等，跨服务调用时，出了问题方便溯源；
 - 打印日志；配合log4j中的MDC，用户某个操作统一加上日志前缀，方便跟踪；
 - 缓存；
-- 事务；保存事务上下文，方便回滚
-- 动态数据源；保存当前数据源，方便切换数据源
+- 事务管理；保存事务上下文，方便回滚
+- 动态数据源切换；
 
 ## 
 
 ```java
-class Test {
-    public static void main(String[] args) throws InterruptedException {
-        //初始化3个资源
-        Semaphore semaphore = new Semaphore(3);
+public class Test0 {
 
-        // 设置两秒后释放两个资源
+    public static void main(String[] args) {
+        ThreadLocal<String> threadLocal = new ThreadLocal<>();
+        threadLocal.set("hi");
+
         CompletableFuture.runAsync(() -> {
-            try { TimeUnit.SECONDS.sleep(2); } catch (InterruptedException e) { throw new RuntimeException(e); }
-            System.out.println("两秒后");
-            semaphore.release(2);
+            threadLocal.set("hello");
+            System.out.println("thread: " + Thread.currentThread().getName() + ", value: " + threadLocal.get());
         });
-
-        for (int i = 0; i < 5; i++) {
-            semaphore.acquire(1);
-            System.out.println("i = " + i + "，成功获取资源，剩余资源数量 = " + semaphore.availablePermits()); // i = 2 时现在会阻塞 ，由于资源不足
-        }
+        System.out.println("thread: " + Thread.currentThread().getName() + ", value: " + threadLocal.get());
     }
 }
 ```
@@ -40,15 +35,11 @@ class Test {
 结果如下：
 
 ```
-i = 0，成功获取资源，剩余资源数量 = 2
-i = 1，成功获取资源，剩余资源数量 = 1
-i = 2，成功获取资源，剩余资源数量 = 0
-两秒后
-i = 3，成功获取资源，剩余资源数量 = 1
-i = 4，成功获取资源，剩余资源数量 = 0
+thread: main, value: hi
+thread: ForkJoinPool.commonPool-worker-19, value: hello
 ```
 
-简单来说就是资源不足时会阻塞，无法往下执行；资源充足时会尝试唤醒线程，继续执行
+简单来说就是每个线程可以在ThreadLocal保存独立的值，不会互相影响；
 
 ## 核心方法
 
