@@ -43,15 +43,10 @@ thread: ForkJoinPool.commonPool-worker-19, value: hello
 
 ## 核心方法
 
-其实Semaphore 用法很简单， 核心方法也只有两个 ，acquire和release
-
-- acquire
-    - 作用：申请资源
-        - 资源充足，则减少资源
-        - 资源不足，线程阻塞并进入等待队列
-- release
-    - 释放资源
-        - 资源增加，并尝试唤醒等待队列的线程
+- set
+    - 作用：保存某个值
+- get
+    - 作用：获取保存的值
 
 # 实现
 
