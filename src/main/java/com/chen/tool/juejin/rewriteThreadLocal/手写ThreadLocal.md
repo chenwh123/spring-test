@@ -44,390 +44,246 @@ thread: ForkJoinPool.commonPool-worker-19, value: hello
 ## 核心方法
 
 - set
-    - 作用：保存某个值
+    - 作用：在当前线程保存某个值
 - get
     - 作用：获取保存的值
 
 # 实现
 
-通过上面的介绍，我们首先需要实现两个功能
-
-- 资源控制，记录当前资源数量，和资源的加减
-- 等待队列，用于记录等待资源的线程，实现两个功能
-    - 出队：资源充足时唤醒线程并出队
-    - 入队：线程申请资源时资源不足则入队
-
-# 资源控制实现
-
-## 版本零
-
-先简单实现如下接口
+## 基本接口
+按照惯例先弄个接口方便迭代
 
 ```java
-public abstract class AbstractSemaphore {
+public interface ThreadLocalInf<T> {
 
-    protected int permits;
+  void set(T value) ;
 
-    /**
-     * 资源尝试减少num , 有剩余则返回剩余，不足则返回负数且资源不变
-     */
-    abstract int tryAcquire(int num);
+  T get() ;
 
-    /**
-     * 资源permits增加num
-     */
-    abstract void tryRelease(int num);
 }
+
 ```
 
-## 版本一
+## 版本-01
+在还没看源码前，我的思路就是用一个Map，key保存线程ID，value保存值；
 
-只需要简单的加法即可，由于Semaphore一般用于多线程环境，多线程环境下对公共资源的操作会出现**竞态条件**的问题，有兴趣可自行了解，这里不再赘述
-
-解决竞态条件的两个方案
-
-- 加锁，使用synchronize 或者 ReentrantLock （性能一般，这里不使用）
-- CAS （compare and set） + `volatile` , 即使用 AtomInteger 或者 `unsafe.compareAndSwapInt`
-
+实现源码：
 ```java
-public class MySemaphore1 extends AbstractSemaphore {
-
-    protected int permits;
-
-		@Override
-    int tryAcquire(int num) {
-        int remain = permits - num;
-        if (remain > 0) {
-            permits = remain;
-        }
-        return remain;
-    }
-    
-    @Override
-    void tryRelease(int num) {
-        permits += num;
-    }
-}
-```
-
-## 版本二（CAS）
-
-这里使用AtomInteger实现
-
-```java
-public class MySemaphore2 extends AbstractSemaphore {
-
-    protected AtomicInteger permits;
-
-    MySemaphore2(int num) {
-        permits = new AtomicInteger(num);
-    }
-
-    @Override
-    int tryAcquire(int num) {
-        while (true) {
-            int permit = permits.get();
-            int remain = permit - num;
-            if (remain < 0 || permits.compareAndSet(permit, remain)) {
-                return remain;
-            }
-        }
-    }
-
-    @Override
-    void tryRelease(int num) {
-        while (true) {
-            int permit = permits.get();
-            int remain = permit + num;
-            if (permits.compareAndSet(permit, remain)) {
-                return;
-            }
-        }
-    }
-}
-```
-
-# 等待队列
-
-虽然我们可以直接用`ConcurrentLinkedQueue`出于加深理解的目的，我们先动手写一个
-
-## 功能
-
-首先要明确我们要实现的队列有什么特点，需要什么功能
-
-- FIFO（先进先出）, 即只需要实现两个方法即可
-    - addLast：把元素添加到队列结尾
-    - removeHead：把头元素去掉
-- 双向链表
-
-## 结构
-
-其中队列用于保存阻塞的线程信息，用户唤醒线程
-
-```mermaid
-
-%%{
-  init: {
-    'theme': 'default',
-    'fontFamily': 'system-ui'
+public class MyThreadLocal1<T> implements ThreadLocalInf<T> {
+  @Override
+  public void set(T value) {
+    getMap().put(Thread.currentThread().getId(), value);
   }
-}%%
 
-flowchart LR
-    head["头部节点
-    不保存任何信息"]
-    tail["尾部节点
-    thread2"]
-    node["中间节点
-    thread1"]
+  @Override
+  public T get() {
+    return getMap().get(Thread.currentThread().getId());
+  }
 
-    head <--> node <--> tail
+  private final Map<Long, T> map = new ConcurrentHashMap<>();
+
+  public Map<Long,T> getMap() {
+    return map;
+  }
+
+  public static void main(String[] args) {
+    ThreadLocalInf<String> threadLocal = new MyThreadLocal1<>();
+    threadLocal.set("hi");
+
+    CompletableFuture.runAsync(() -> {
+      threadLocal.set("hello");
+      System.out.println("thread: " + Thread.currentThread().getName() + ", value: " + threadLocal.get());
+    });
+    System.out.println("thread: " + Thread.currentThread().getName() + ", value: " + threadLocal.get());
+  }
+}
 ```
+这样实现就是简单直观，缺点就是要用到ConcurrentHashMap来保证线程安全，高并发环境效率相对低一点。
+要是产品要我实现一个ThreadLocal，我就这么写了🐶
 
-### 抽象类
 
+## 版本-02
+这会我读了下ThreadLocal的源码之后发现， 它并非使用ThreadLocal持有Map，而是使用Thread持有；好处就是不用担心线程安全问题。
+
+JDK源码：
+```java
+public
+class Thread implements Runnable {
+  //...
+  
+  /* ThreadLocal values pertaining to this thread. This map is maintained
+   * by the ThreadLocal class. */
+  ThreadLocal.ThreadLocalMap threadLocals = null;
+  
+  //...
+}
+
+static class ThreadLocalMap {
+    /**
+     * Set the value associated with key.
+     *
+     * @param key the thread local object
+     * @param value the value to be set
+     */
+    private void set(ThreadLocal<?> key, Object value) {
+      //...
+    }
+}
+```
+所以说我们这里还要自己实现一个Thread😅；
+
+并且通过源码我们可以发现，这个ThreadLocalMap是以ThreadLocal作为key的，所以接下来我们实现MyThreadLocal2还得实现一下hashcode和equals方法
+
+考虑到我们没办法修改jdk中thread的代码，我们自己实现一个MyThread类，然后里面维护一个Map
+
+```java
+class MyThread extends Thread {
+  Map<ThreadLocalInf<?>, Object> threadLocalMap = new HashMap<>();
+  public MyThread(Runnable runnable) {
+    super(runnable);
+  }
+}
+
+public class MyThreadLocal2<T> implements ThreadLocalInf<T> {
+  private static final AtomicInteger nextId = new AtomicInteger(0);
+  private final int id = nextId.getAndIncrement();
+
+  // hashCode没必要写得太复杂，因为每个ThreadLocal都是唯一的，给出一个自增的id就可以了
+  @Override
+  public int hashCode() {
+    return id;
+  }
+
+  // 这里equals == 即可，因为每个ThreadLocal都是唯一的
+  @Override
+  public boolean equals(Object obj) {
+    return this == obj ;
+  }
+
+  @Override
+  public void set(T value) {
+    Thread thread = Thread.currentThread();
+    if(thread instanceof MyThread) {
+      MyThread myThread = (MyThread) thread;
+      myThread.threadLocalMap.put(this, value);
+    } else {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  @Override
+  public T get() {
+    Thread thread = Thread.currentThread();
+    if( thread instanceof MyThread) {
+      MyThread myThread = (MyThread) thread;
+      return (T) myThread.threadLocalMap.get(this);
+    } else {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  public static void main(String[] args) {
+    // 创建线程池 ， 使用MyThread
+    ExecutorService executorService = Executors.newCachedThreadPool(MyThread::new);
+
+    // 创建10个ThreadLocal
+    List<ThreadLocalInf<String>> localList = new ArrayList<>();
+    for (int i = 0; i < 10; i++) {
+      localList.add(new MyThreadLocal2<>());
+    }
+    //这里我们上一下强度， 开100个线程测试
+    for (int i = 0; i < 100; i++) {
+      CompletableFuture.runAsync(() -> {
+        for (int j = 0; j < localList.size(); j++) {
+          String val = Thread.currentThread().getName() + "-" + j;
+          ThreadLocalInf<String> local = localList.get(j);
+          System.out.println("thread :" + Thread.currentThread().getName() + ",set value: " + val);
+          local.set(val);
+        }
+        // 暂停5秒
+        try { TimeUnit.SECONDS.sleep(5); } catch (InterruptedException e) { throw new RuntimeException(e); }
+        for (ThreadLocalInf<String> local : localList) {
+          System.out.println("thread :" + Thread.currentThread().getName() + ",get value: " + local.get());
+
+        }
+
+      }, executorService);
+
+    }
+
+    try {
+      TimeUnit.SECONDS.sleep(10);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+    System.out.println("finish");
+  }
+}
+```
+到这里你应该也基本明白ThreadLocal的构造， 接下来我们再看看细节。
+
+## 版本-03
+ThreadLocal可能就是这么简单，但一旦到了面试的场景，防止面试官使劲扣点东西来问，我们还是得再深入研究一下。
+
+接下来说说老生常谈的内存泄漏问题。
+
+### 为什么会出现内存泄漏
+
+内存泄漏简单来说就是不再使用的内存无法被回收，导致内存占用越来越大，最终导致OOM（Out of Memory 内存溢出）。
+
+我们经常使用的springboot每个请求都会使用一个线程，请求结束后线程并不会销毁，而是放到线程池中，等待下一次请求；如果在这个请求结束前，你保存了大量的数据到ThreadLocal中，但没有主动remove，而且这个Thread由于使用的是线程池，是会一直存在的，它所保存的threadLocals的对象也会一直存在。那么这部分数据就会一直存在内存中，从而很容易导致内存泄漏
+
+为了应对这种情况ThreadLocalMap中的Entry继承了WeakReference，这样一旦发生GC，并且ThreadLocal没有其他强引用，ThreadLocalMap中的Entry的key就会被回收（等同于调用weakReference.clear()）变为null。
+> 这里说一下题外话，我们一般使用ThreadLocal 会这么定义：public static final ThreadLocal<String> local = new ThreadLocal<>(); 这样做相当于加了个不可更改的强引用，因此，ThreadLocalMap中的Entry的key是不会被回收；所以我认为开发的过程中不必太在意这个Entry中的WeakReference。
+
+这里再贴一下WeakReference生效的例子:
+例子代码：
 ```java
 /**
- * 双向队列， 包含头尾指针和 addLast , removeHead方法
+ * JDK11
  */
-public abstract class AbstractDeque {
+public class WeakReferenceExample {
 
-    protected Node head;
-    protected Node tail;
+    public static void main(String[] args) {
+        String str = new String("Hello, World!"); //强制创建对象在堆中，而不是常量池中；常量池中的对象不会被回收，哪怕只有弱引用
+//      String str = "Hello, World!" //对象会在常量池
+        WeakReference<String> weakReference = new WeakReference<>(str);
+        str = null; //尝试取消注释该行代码，看看效果
+      
+        System.gc(); //相当于调。weakReference.clear()
 
-    /**
-     * 节点类， 包含前后指针和线程
-     */
-    protected static class Node {
-        Node prev;
-        Node next;
-        Thread thread;
-        public Node(Thread thread) {
-            this.thread = thread;
-        }
-    }
-    public abstract void addLast(Node node);
-    public abstract void removeHead();
-    public int size(){
-        int size = 0;
-        Node node = head;
-        while (node != null) {
-            size++;
-            node = node.next;
-        }
-        return size;
+        System.out.println(weakReference.get()); //返回null
     }
 }
 ```
 
-### 实现-版本一
+如果返回null，那么就是弱引用里面的对象被回收了。
 
-非线程安全的代码在多线程add 或者 remove有可能失效， 可以自行测试
 
+
+### ThreadLocal中弱引用的作用，以及ThreadLocal对弱引用的后续处理
+通过上面的解释，相信你也知道这个WeakReference的确没什么用了😎（可能有但是我的使用场景用不上）。 但有时面试官可能会不依不饶，虽然我很想回答没啥用。但如果你想吹多一点接着往下看。
+我们先看看它的源码
+
+JDK源码：
 ```java
-public class Deque1 extends AbstractDeque {
+        /**
+         * The entries in this hash map extend WeakReference, using
+         * its main ref field as the key (which is always a
+         * ThreadLocal object).  Note that null keys (i.e. entry.get()
+         * == null) mean that the key is no longer referenced, so the
+         * entry can be expunged from table.  Such entries are referred to
+         * as "stale entries" in the code that follows.
+         */
+        static class Entry extends WeakReference<ThreadLocal<?>> {
+            /** The value associated with this ThreadLocal. */
+            Object value;
 
-    /**
-     * 先初始化一个空节点，头尾指针都指向这个节点
-     */
-    public Deque1(){
-        head = new Node(null);
-        tail = head;
-    }
-
-    public void addLast(Node node) {
-        tail.next = node;
-        node.prev = tail;
-        tail = node;
-    }
-
-    public void removeHead(){
-        Node oldHead = head;
-        head = oldHead.next;
-        oldHead.next = null;
-        // 使新的头节点的线程设置为空
-        head.thread = null;
-    }
-
-    /*测试代码*/
-    public static void main(String[] args) throws Exception {
-        Deque1 deque1 = new Deque1();
-        for (int i = 0; i < 100; i++) {
-            CompletableFuture.runAsync(() -> {
-                try { deque1.addLast(new Node(Thread.currentThread()));
-                } catch (Exception e) { }
-            });
-        }
-        TimeUnit.SECONDS.sleep(2);
-        // 这里的期望值包含头部的话应该是101，但实际可能是97，98等
-        System.out.println(deque1.size());
-    }
-}
-```
-
-### 实现-版本二-线程安全队列
-
-方法有两个
-
-- 加锁 ，只需直接在方法增加synchronize ， 可以自行尝试
-- CAS ， 可以使用`AtomicInteger` 或者 `Unsafe`
-
-这里使用unsafe方法实现
-
-1. 抽象类代码，这里其实只增加了4个 compareAndSet方法。需要注意的是使用unsafe需要反射获取
-
-```java
-/**
- * 双向队列， 包含头尾指针和 addLast , removeHead方法
- */
-public abstract class AbstractDeque {
-
-    protected Node head;
-    protected Node tail;
-
-    private static final Unsafe unsafe;
-    static {
-        try {
-            Field f = Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-            unsafe = (Unsafe) f.get(null);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static final long HEAD;
-    private static final long TAIL;
-
-    static {
-        try {
-            HEAD = unsafe.objectFieldOffset(AbstractDeque.class.getDeclaredField("head"));
-            TAIL = unsafe.objectFieldOffset(AbstractDeque.class.getDeclaredField("tail"));
-        } catch (NoSuchFieldException e) {
-            throw new RuntimeException(e);
-        }
-    }
-    public boolean compareAndSetHead(Node expect, Node update) {
-        return unsafe.compareAndSwapObject(this, HEAD, expect, update);
-    }
-    public boolean compareAndSetTail(Node expect, Node update) {
-        return unsafe.compareAndSwapObject(this, TAIL, expect, update);
-    }
-
-    /**
-     * 节点类， 包含前后指针和线程
-     */
-    protected static class Node {
-        Node prev;
-        Node next;
-        Thread thread;
-
-        private static final long PREV;
-        private static final long NEXT;
-
-        static {
-            try {
-                PREV = unsafe.objectFieldOffset(Node.class.getDeclaredField("prev"));
-                NEXT = unsafe.objectFieldOffset(Node.class.getDeclaredField("next"));
-            } catch (NoSuchFieldException e) {
-                throw new RuntimeException(e);
+            Entry(ThreadLocal<?> k, Object v) {
+                super(k);
+                value = v;
             }
         }
-        public Node(Thread thread) {
-            this.thread = thread;
-        }
-        public boolean compareAndSetPrev(Node expect, Node update) {
-            return unsafe.compareAndSwapObject(this, PREV, expect, update);
-        }
-        public boolean compareAndSetNext(Node expect, Node update) {
-            return unsafe.compareAndSwapObject(this, NEXT, expect, update);
-        }
-
-    }
-    public abstract void addLast(Node node);
-    public abstract void removeHead();
-    public int size(){
-        int size = 0;
-        Node node = head;
-        while (node != null) {
-            size++;
-            node = node.next;
-        }
-        return size;
-    }
-}
 ```
 
-1. 实现代码
-
-```java
-public class Deque2 extends AbstractDeque {
-
-    /**
-     * 先初始化一个空节点，头尾指针都指向这个节点
-     */
-    public Deque2() {
-        head = new Node(null);
-        tail = head;
-    }
-
-    public void addLast(Node node) {
-        while (true) {
-            Node oldTail = tail;
-            Node newTail = node;
-            if (oldTail.compareAndSetNext(null, newTail)) {
-                newTail.prev = oldTail;
-                tail = newTail;
-                return;
-            }
-        }
-    }
-
-    public void removeHead() {
-        while (true) {
-            Node oldHead = head;
-            Node newHead = head.next;
-            if (compareAndSetHead(oldHead, newHead)) {
-                oldHead.next = null;
-                newHead.prev = null;
-                newHead.thread = null;
-                return;
-            }
-        }
-    }
-
-    /*测试代码*/
-    public static void main(String[] args) throws Exception {
-        Deque2 deque1 = new Deque2();
-        for (int i = 0; i < 100; i++) {
-            CompletableFuture.runAsync(() -> {
-                try {
-                    deque1.addLast(new Node(Thread.currentThread()));
-                } catch (Exception e) {
-                }
-            });
-        }
-
-        for (int i = 0; i < 50; i++) {
-            CompletableFuture.runAsync(() -> {
-                try {
-                    deque1.removeHead();
-                } catch (Exception e) {
-                }
-            });
-        }
-        TimeUnit.SECONDS.sleep(2);
-        // 这里的期望值包含头部的话应该是51
-        System.out.println(deque1.size());
-    }
-}
-```
-
-# 最终版本
-
-到这里为止，我们已经实现了已经基本实现Semphore的核心功能
-
-- 资源控制 Semaphore2
-- 等待队列 Deque2
-
-我们简单的把它们组合一下
+我们先做个假设，哪怕这个WeakReference生效了 ，就是GC后回收了key，但是value是强引用（只有被super(k)框住的才是弱引用😥）。一般来说ThreadLocal本身是不太占用内存的，但是value是用户传值，占用内存可能会很大。
