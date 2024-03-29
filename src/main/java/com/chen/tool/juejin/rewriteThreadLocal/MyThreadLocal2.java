@@ -8,16 +8,13 @@ import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class MyThread extends Thread {
+class MyThread2 extends Thread {
     Map<ThreadLocalInf<?>, Object> threadLocalMap = new HashMap<>();
-    public MyThread(Runnable runnable) {
+    public MyThread2(Runnable runnable) {
         super(runnable);
     }
 }
 
-/**
- * @author chenwh3
- */
 public class MyThreadLocal2<T> implements ThreadLocalInf<T> {
     private static final AtomicInteger nextId = new AtomicInteger(0);
     private final int id = nextId.getAndIncrement();
@@ -37,8 +34,8 @@ public class MyThreadLocal2<T> implements ThreadLocalInf<T> {
     @Override
     public void set(T value) {
         Thread thread = Thread.currentThread();
-        if(thread instanceof MyThread) {
-            MyThread myThread = (MyThread) thread;
+        if(thread instanceof MyThread2) {
+            MyThread2 myThread = (MyThread2) thread;
             myThread.threadLocalMap.put(this, value);
         } else {
             throw new UnsupportedOperationException();
@@ -48,8 +45,8 @@ public class MyThreadLocal2<T> implements ThreadLocalInf<T> {
     @Override
     public T get() {
         Thread thread = Thread.currentThread();
-        if( thread instanceof MyThread) {
-            MyThread myThread = (MyThread) thread;
+        if( thread instanceof MyThread2) {
+            MyThread2 myThread = (MyThread2) thread;
             return (T) myThread.threadLocalMap.get(this);
         } else {
             throw new UnsupportedOperationException();
@@ -58,7 +55,7 @@ public class MyThreadLocal2<T> implements ThreadLocalInf<T> {
 
     public static void main(String[] args) {
         // 创建线程池 ， 使用MyThread
-        ExecutorService executorService = Executors.newCachedThreadPool(MyThread::new);
+        ExecutorService executorService = Executors.newCachedThreadPool(MyThread2::new);
 
         // 创建10个ThreadLocal
         List<ThreadLocalInf<String>> localList = new ArrayList<>();

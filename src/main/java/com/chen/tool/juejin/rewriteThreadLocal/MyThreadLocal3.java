@@ -3,46 +3,99 @@ package com.chen.tool.juejin.rewriteThreadLocal;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+
+/**
+ * 取消hash冲突的实现，简单使用List保存Entry
+ */
+class ThreadLocalMap {
+    //照搬ThreadLocalMap.Entry
+    static class Entry extends WeakReference<ThreadLocalInf<?>> {
+        Object value;
+
+        Entry(ThreadLocalInf<?> k, Object v) {
+            super(k);
+            value = v;
+        }
+
+    }
+
+    private final List<Entry> table = new ArrayList<>();
+
+    private int getIndex(ThreadLocalInf<?> key) {
+        return key.hashCode();
+    }
+
+    public Object get(ThreadLocalInf<?> key) {
+        return getByIndex(getIndex(key));
+    }
+
+    public Object getByIndex(int index) {
+        Entry entry = table.get(index);
+        if (entry == null) {
+            return null;
+        }
+        if (entry.get() == null) {
+            entry.value = null;
+            table.remove(entry);
+            return null;
+        } else {
+            return entry.value;
+        }
+    }
+
+    /**
+     * 扩容时清理无效的Entry
+     */
+    public void put(ThreadLocalInf<?> key, Object value) {
+        int index = getIndex(key);
+        // 扩容
+        while (table.size() <= index) {
+            table.add(null);
+            for (int i = 0; i < table.size(); i++) {
+                if (table.get(i) != null && table.get(i).get() == null) {
+                    table.set(i, null);
+                }
+            }
+        }
+        table.set(index, new Entry(key, value));
+    }
+}
+
+/**
+ * 自定义线程类，为了自定义ThreadLocalMap
+ */
 class MyThread3 extends Thread {
-    Map<ThreadLocalInf<?>, Object> threadLocalMap = new HashMap<>();
+
+    ThreadLocalMap threadLocalMap = new ThreadLocalMap();
+
     public MyThread3(Runnable runnable) {
         super(runnable);
     }
 }
 
-/**
- * @author chenwh3
- */
+
 public class MyThreadLocal3<T> implements ThreadLocalInf<T> {
     private static final AtomicInteger nextId = new AtomicInteger(0);
     private final int id = nextId.getAndIncrement();
 
-    // hashCode没必要写得太复杂，因为每个ThreadLocal都是唯一的，给出一个自增的id就可以了
     @Override
     public int hashCode() {
         return id;
     }
 
-    // 这里equals == 即可，因为每个ThreadLocal都是唯一的
     @Override
     public boolean equals(Object obj) {
-        return this == obj ;
+        return this == obj;
     }
 
     @Override
     public void set(T value) {
         Thread thread = Thread.currentThread();
-        if(thread instanceof MyThread) {
-            MyThread myThread = (MyThread) thread;
+        if (thread instanceof MyThread3) {
+            MyThread3 myThread = (MyThread3) thread;
             myThread.threadLocalMap.put(this, value);
         } else {
             throw new UnsupportedOperationException();
@@ -52,14 +105,12 @@ public class MyThreadLocal3<T> implements ThreadLocalInf<T> {
     @Override
     public T get() {
         Thread thread = Thread.currentThread();
-        if( thread instanceof MyThread) {
-            MyThread myThread = (MyThread) thread;
+        if (thread instanceof MyThread3) {
+            MyThread3 myThread = (MyThread3) thread;
             return (T) myThread.threadLocalMap.get(this);
         } else {
             throw new UnsupportedOperationException();
         }
     }
-
-//    public static final String str = "123";
 
 }

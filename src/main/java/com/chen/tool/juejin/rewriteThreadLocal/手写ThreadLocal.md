@@ -137,87 +137,88 @@ static class ThreadLocalMap {
 考虑到我们没办法修改jdk中thread的代码，我们自己实现一个MyThread类，然后里面维护一个Map
 
 ```java
-class MyThread extends Thread {
-  Map<ThreadLocalInf<?>, Object> threadLocalMap = new HashMap<>();
-  public MyThread(Runnable runnable) {
-    super(runnable);
-  }
+class MyThread2 extends Thread {
+    Map<ThreadLocalInf<?>, Object> threadLocalMap = new HashMap<>();
+    public MyThread2(Runnable runnable) {
+        super(runnable);
+    }
 }
 
+
 public class MyThreadLocal2<T> implements ThreadLocalInf<T> {
-  private static final AtomicInteger nextId = new AtomicInteger(0);
-  private final int id = nextId.getAndIncrement();
+    private static final AtomicInteger nextId = new AtomicInteger(0);
+    private final int id = nextId.getAndIncrement();
 
-  // hashCode没必要写得太复杂，因为每个ThreadLocal都是唯一的，给出一个自增的id就可以了
-  @Override
-  public int hashCode() {
-    return id;
-  }
-
-  // 这里equals == 即可，因为每个ThreadLocal都是唯一的
-  @Override
-  public boolean equals(Object obj) {
-    return this == obj ;
-  }
-
-  @Override
-  public void set(T value) {
-    Thread thread = Thread.currentThread();
-    if(thread instanceof MyThread) {
-      MyThread myThread = (MyThread) thread;
-      myThread.threadLocalMap.put(this, value);
-    } else {
-      throw new UnsupportedOperationException();
+    // hashCode没必要写得太复杂，因为每个ThreadLocal都是唯一的，给出一个自增的id就可以了
+    @Override
+    public int hashCode() {
+        return id;
     }
-  }
 
-  @Override
-  public T get() {
-    Thread thread = Thread.currentThread();
-    if( thread instanceof MyThread) {
-      MyThread myThread = (MyThread) thread;
-      return (T) myThread.threadLocalMap.get(this);
-    } else {
-      throw new UnsupportedOperationException();
+    // 这里equals == 即可，因为每个ThreadLocal都是唯一的
+    @Override
+    public boolean equals(Object obj) {
+        return this == obj ;
     }
-  }
 
-  public static void main(String[] args) {
-    // 创建线程池 ， 使用MyThread
-    ExecutorService executorService = Executors.newCachedThreadPool(MyThread::new);
-
-    // 创建10个ThreadLocal
-    List<ThreadLocalInf<String>> localList = new ArrayList<>();
-    for (int i = 0; i < 10; i++) {
-      localList.add(new MyThreadLocal2<>());
-    }
-    //这里我们上一下强度， 开100个线程测试
-    for (int i = 0; i < 100; i++) {
-      CompletableFuture.runAsync(() -> {
-        for (int j = 0; j < localList.size(); j++) {
-          String val = Thread.currentThread().getName() + "-" + j;
-          ThreadLocalInf<String> local = localList.get(j);
-          System.out.println("thread :" + Thread.currentThread().getName() + ",set value: " + val);
-          local.set(val);
+    @Override
+    public void set(T value) {
+        Thread thread = Thread.currentThread();
+        if(thread instanceof MyThread2) {
+            MyThread2 myThread = (MyThread2) thread;
+            myThread.threadLocalMap.put(this, value);
+        } else {
+            throw new UnsupportedOperationException();
         }
-        // 暂停5秒
-        try { TimeUnit.SECONDS.sleep(5); } catch (InterruptedException e) { throw new RuntimeException(e); }
-        for (ThreadLocalInf<String> local : localList) {
-          System.out.println("thread :" + Thread.currentThread().getName() + ",get value: " + local.get());
+    }
+
+    @Override
+    public T get() {
+        Thread thread = Thread.currentThread();
+        if( thread instanceof MyThread2) {
+            MyThread2 myThread = (MyThread2) thread;
+            return (T) myThread.threadLocalMap.get(this);
+        } else {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    public static void main(String[] args) {
+        // 创建线程池 ， 使用MyThread
+        ExecutorService executorService = Executors.newCachedThreadPool(MyThread2::new);
+
+        // 创建10个ThreadLocal
+        List<ThreadLocalInf<String>> localList = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            localList.add(new MyThreadLocal2<>());
+        }
+        //这里我们上一下强度， 开100个线程测试
+        for (int i = 0; i < 100; i++) {
+            CompletableFuture.runAsync(() -> {
+                for (int j = 0; j < localList.size(); j++) {
+                    String val = Thread.currentThread().getName() + "-" + j;
+                    ThreadLocalInf<String> local = localList.get(j);
+                    System.out.println("thread :" + Thread.currentThread().getName() + ",set value: " + val);
+                    local.set(val);
+                }
+                // 暂停5秒
+                try { TimeUnit.SECONDS.sleep(5); } catch (InterruptedException e) { throw new RuntimeException(e); }
+                for (ThreadLocalInf<String> local : localList) {
+                    System.out.println("thread :" + Thread.currentThread().getName() + ",get value: " + local.get());
+
+                }
+
+            }, executorService);
 
         }
 
-      }, executorService);
-
+        try {
+            TimeUnit.SECONDS.sleep(10);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println("finish");
     }
-
-    try {
-      TimeUnit.SECONDS.sleep(10);
-    } catch (InterruptedException e) {
-      throw new RuntimeException(e);
-    }
-    System.out.println("finish");
-  }
 }
 ```
 到这里你应该也基本明白ThreadLocal的构造， 接下来我们再看看细节。
@@ -286,4 +287,137 @@ JDK源码：
         }
 ```
 
-我们先做个假设，哪怕这个WeakReference生效了 ，就是GC后回收了key，但是value是强引用（只有被super(k)框住的才是弱引用😥）。一般来说ThreadLocal本身是不太占用内存的，但是value是用户传值，占用内存可能会很大。
+我们先做个假设，哪怕这个WeakReference生效了 ，就是GC后回收了key，但是value是强引用（只有被super(k)框住的才是弱引用😥）。一般来说ThreadLocal作为key本身是不太占用内存的，但是value是用户传值，占用内存可能会很大，因此我们需要及时清理value。
+
+那么ThreadLocal是如何清理掉没用的value的？
+
+这里先说结论，ThreadLocal调用get()或者set()或者内部map触发扩容的时候，都会检查对应的key是否为null，如果是null，就会把这个Entry的value置为null;
+
+感兴趣的话可以阅读下源码ThreadLocal 里面的 expungeStaleEntry，它的作用除了清除key为空的entry外还重新排列与被清空的key产生hash冲突的元素的索引，这里就不贴了代码了，免得你们以为我刷字数。
+
+### 版本-03代码实现
+
+接下来我们也实现一下ThreadLocalMap中的对entry的null值处理
+
+这里我就不用Map了，直接用数组代替map的存储功能，否则实现处理hash冲突的代码太长了。
+
+重新列一下我们要实现的功能
+
+- set: 保存值
+  - 如果key为null，直接替换value ， 如果需要扩容，清理所有key为null的entry
+- get: 获取值
+  - 如果entry的key为null，删除entry
+  
+实现代码：
+```java
+/**
+ * 取消hash冲突的实现，简单使用List保存Entry
+ */
+class ThreadLocalMap {
+    //照搬ThreadLocalMap.Entry
+    static class Entry extends WeakReference<ThreadLocalInf<?>> {
+        Object value;
+
+        Entry(ThreadLocalInf<?> k, Object v) {
+            super(k);
+            value = v;
+        }
+
+    }
+
+    private final List<Entry> table = new ArrayList<>();
+
+    private int getIndex(ThreadLocalInf<?> key) {
+        return key.hashCode();
+    }
+
+    public Object get(ThreadLocalInf<?> key) {
+        return getByIndex(getIndex(key));
+    }
+
+    public Object getByIndex(int index) {
+        Entry entry = table.get(index);
+        if (entry == null) {
+            return null;
+        }
+        if (entry.get() == null) {
+            entry.value = null;
+            table.remove(entry);
+            return null;
+        } else {
+            return entry.value;
+        }
+    }
+
+    /**
+     * 扩容时清理无效的Entry
+     */
+    public void put(ThreadLocalInf<?> key, Object value) {
+        int index = getIndex(key);
+        // 扩容
+        while (table.size() <= index) {
+            table.add(null);
+            for (int i = 0; i < table.size(); i++) {
+                if (table.get(i) != null && table.get(i).get() == null) {
+                    table.set(i, null);
+                }
+            }
+        }
+        table.set(index, new Entry(key, value));
+    }
+}
+
+/**
+ * 自定义线程类，为了自定义ThreadLocalMap
+ */
+class MyThread3 extends Thread {
+
+    ThreadLocalMap threadLocalMap = new ThreadLocalMap();
+
+    public MyThread3(Runnable runnable) {
+        super(runnable);
+    }
+}
+
+
+public class MyThreadLocal3<T> implements ThreadLocalInf<T> {
+    private static final AtomicInteger nextId = new AtomicInteger(0);
+    private final int id = nextId.getAndIncrement();
+
+    @Override
+    public int hashCode() {
+        return id;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return this == obj;
+    }
+
+    @Override
+    public void set(T value) {
+        Thread thread = Thread.currentThread();
+        if (thread instanceof MyThread3) {
+            MyThread3 myThread = (MyThread3) thread;
+            myThread.threadLocalMap.put(this, value);
+        } else {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    @Override
+    public T get() {
+        Thread thread = Thread.currentThread();
+        if (thread instanceof MyThread3) {
+            MyThread3 myThread = (MyThread3) thread;
+            return (T) myThread.threadLocalMap.get(this);
+        } else {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+}
+
+```
+以上就是最终的版本实现 ， 有兴趣可以参考上述版本02做一些测试。
+上述代码参考了netty源码中的 io.netty.util.concurrent.FastThreadLocal ，它也是使用数组实现，不存在hash冲突。有兴趣的同学可以去学习一下
