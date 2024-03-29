@@ -1,4 +1,4 @@
-package com.chen.tool.Semaphore;
+package com.chen.tool.juejin.Semaphore;
 
 
 public class MySemaphore1 extends AbstractSemaphore {

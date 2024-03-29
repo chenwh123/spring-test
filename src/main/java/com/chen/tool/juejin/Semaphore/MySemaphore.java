@@ -1,4 +1,4 @@
-package com.chen.tool.Semaphore;
+package com.chen.tool.juejin.Semaphore;
 
 
 import io.netty.util.concurrent.FastThreadLocal;
