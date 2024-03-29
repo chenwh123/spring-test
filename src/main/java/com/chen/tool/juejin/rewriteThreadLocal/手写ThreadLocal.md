@@ -1,7 +1,12 @@
+---
+theme: channing-cyan
+highlight: a11y-dark
+---
+
 # 手写ThreadLocal
 
 # 前言
-每次面试都忘记这个知识点, 干脆自己写一写加深一下记忆
+还在面试的前一天上班囫囵吞枣找资料？还在面试前一晚辗转难眠？还在去面试的路上因为准备不足而忐忑不安？还在每次面试后因为面试官问的问题太刁钻而破口大骂？今天，教你手把手实现ThreadLocal，以后面试吊打面试官，脚踢HR🤣😁。
 
 # ThreadLocal用法简介
 ## 使用场景
@@ -44,9 +49,9 @@ thread: ForkJoinPool.commonPool-worker-19, value: hello
 ## 核心方法
 
 - set
-    - 作用：在当前线程保存某个值
+  - 作用：在当前线程保存某个值
 - get
-    - 作用：获取保存的值
+  - 作用：获取保存的值
 
 # 实现
 
@@ -99,6 +104,7 @@ public class MyThreadLocal1<T> implements ThreadLocalInf<T> {
 }
 ```
 这样实现就是简单直观，缺点就是要用到ConcurrentHashMap来保证线程安全，高并发环境效率相对低一点。
+
 要是产品要我实现一个ThreadLocal，我就这么写了🐶
 
 
@@ -110,24 +116,24 @@ JDK源码：
 public
 class Thread implements Runnable {
   //...
-  
+
   /* ThreadLocal values pertaining to this thread. This map is maintained
    * by the ThreadLocal class. */
   ThreadLocal.ThreadLocalMap threadLocals = null;
-  
+
   //...
 }
 
 static class ThreadLocalMap {
-    /**
-     * Set the value associated with key.
-     *
-     * @param key the thread local object
-     * @param value the value to be set
-     */
-    private void set(ThreadLocal<?> key, Object value) {
-      //...
-    }
+  /**
+   * Set the value associated with key.
+   *
+   * @param key the thread local object
+   * @param value the value to be set
+   */
+  private void set(ThreadLocal<?> key, Object value) {
+    //...
+  }
 }
 ```
 所以说我们这里还要自己实现一个Thread😅；
@@ -138,87 +144,87 @@ static class ThreadLocalMap {
 
 ```java
 class MyThread2 extends Thread {
-    Map<ThreadLocalInf<?>, Object> threadLocalMap = new HashMap<>();
-    public MyThread2(Runnable runnable) {
-        super(runnable);
-    }
+  Map<ThreadLocalInf<?>, Object> threadLocalMap = new HashMap<>();
+  public MyThread2(Runnable runnable) {
+    super(runnable);
+  }
 }
 
 
 public class MyThreadLocal2<T> implements ThreadLocalInf<T> {
-    private static final AtomicInteger nextId = new AtomicInteger(0);
-    private final int id = nextId.getAndIncrement();
+  private static final AtomicInteger nextId = new AtomicInteger(0);
+  private final int id = nextId.getAndIncrement();
 
-    // hashCode没必要写得太复杂，因为每个ThreadLocal都是唯一的，给出一个自增的id就可以了
-    @Override
-    public int hashCode() {
-        return id;
+  // hashCode没必要写得太复杂，因为每个ThreadLocal都是唯一的，给出一个自增的id就可以了
+  @Override
+  public int hashCode() {
+    return id;
+  }
+
+  // 这里equals == 即可，因为每个ThreadLocal都是唯一的
+  @Override
+  public boolean equals(Object obj) {
+    return this == obj ;
+  }
+
+  @Override
+  public void set(T value) {
+    Thread thread = Thread.currentThread();
+    if(thread instanceof MyThread2) {
+      MyThread2 myThread = (MyThread2) thread;
+      myThread.threadLocalMap.put(this, value);
+    } else {
+      throw new UnsupportedOperationException();
     }
+  }
 
-    // 这里equals == 即可，因为每个ThreadLocal都是唯一的
-    @Override
-    public boolean equals(Object obj) {
-        return this == obj ;
+  @Override
+  public T get() {
+    Thread thread = Thread.currentThread();
+    if( thread instanceof MyThread2) {
+      MyThread2 myThread = (MyThread2) thread;
+      return (T) myThread.threadLocalMap.get(this);
+    } else {
+      throw new UnsupportedOperationException();
     }
+  }
 
-    @Override
-    public void set(T value) {
-        Thread thread = Thread.currentThread();
-        if(thread instanceof MyThread2) {
-            MyThread2 myThread = (MyThread2) thread;
-            myThread.threadLocalMap.put(this, value);
-        } else {
-            throw new UnsupportedOperationException();
+  public static void main(String[] args) {
+    // 创建线程池 ， 使用MyThread
+    ExecutorService executorService = Executors.newCachedThreadPool(MyThread2::new);
+
+    // 创建10个ThreadLocal
+    List<ThreadLocalInf<String>> localList = new ArrayList<>();
+    for (int i = 0; i < 10; i++) {
+      localList.add(new MyThreadLocal2<>());
+    }
+    //这里我们上一下强度， 开100个线程测试
+    for (int i = 0; i < 100; i++) {
+      CompletableFuture.runAsync(() -> {
+        for (int j = 0; j < localList.size(); j++) {
+          String val = Thread.currentThread().getName() + "-" + j;
+          ThreadLocalInf<String> local = localList.get(j);
+          System.out.println("thread :" + Thread.currentThread().getName() + ",set value: " + val);
+          local.set(val);
         }
-    }
-
-    @Override
-    public T get() {
-        Thread thread = Thread.currentThread();
-        if( thread instanceof MyThread2) {
-            MyThread2 myThread = (MyThread2) thread;
-            return (T) myThread.threadLocalMap.get(this);
-        } else {
-            throw new UnsupportedOperationException();
-        }
-    }
-
-    public static void main(String[] args) {
-        // 创建线程池 ， 使用MyThread
-        ExecutorService executorService = Executors.newCachedThreadPool(MyThread2::new);
-
-        // 创建10个ThreadLocal
-        List<ThreadLocalInf<String>> localList = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
-            localList.add(new MyThreadLocal2<>());
-        }
-        //这里我们上一下强度， 开100个线程测试
-        for (int i = 0; i < 100; i++) {
-            CompletableFuture.runAsync(() -> {
-                for (int j = 0; j < localList.size(); j++) {
-                    String val = Thread.currentThread().getName() + "-" + j;
-                    ThreadLocalInf<String> local = localList.get(j);
-                    System.out.println("thread :" + Thread.currentThread().getName() + ",set value: " + val);
-                    local.set(val);
-                }
-                // 暂停5秒
-                try { TimeUnit.SECONDS.sleep(5); } catch (InterruptedException e) { throw new RuntimeException(e); }
-                for (ThreadLocalInf<String> local : localList) {
-                    System.out.println("thread :" + Thread.currentThread().getName() + ",get value: " + local.get());
-
-                }
-
-            }, executorService);
+        // 暂停5秒
+        try { TimeUnit.SECONDS.sleep(5); } catch (InterruptedException e) { throw new RuntimeException(e); }
+        for (ThreadLocalInf<String> local : localList) {
+          System.out.println("thread :" + Thread.currentThread().getName() + ",get value: " + local.get());
 
         }
 
-        try {
-            TimeUnit.SECONDS.sleep(10);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        System.out.println("finish");
+      }, executorService);
+
     }
+
+    try {
+      TimeUnit.SECONDS.sleep(10);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+    System.out.println("finish");
+  }
 }
 ```
 到这里你应该也基本明白ThreadLocal的构造， 接下来我们再看看细节。
@@ -245,16 +251,16 @@ ThreadLocal可能就是这么简单，但一旦到了面试的场景，防止面
  */
 public class WeakReferenceExample {
 
-    public static void main(String[] args) {
-        String str = new String("Hello, World!"); //强制创建对象在堆中，而不是常量池中；常量池中的对象不会被回收，哪怕只有弱引用
-//      String str = "Hello, World!" //对象会在常量池
-        WeakReference<String> weakReference = new WeakReference<>(str);
-        str = null; //尝试取消注释该行代码，看看效果
-      
-        System.gc(); //相当于调。weakReference.clear()
+  public static void main(String[] args) {
+    String str = new String("Hello, World!"); //强制创建对象在堆中，而不是常量池中；常量池中的对象不会被回收，哪怕只有弱引用
+    //      String str = "Hello, World!" //对象会在常量池
+    WeakReference<String> weakReference = new WeakReference<>(str);
+    str = null; //尝试取消注释该行代码，看看效果
 
-        System.out.println(weakReference.get()); //返回null
-    }
+    System.gc(); //相当于调。weakReference.clear()
+
+    System.out.println(weakReference.get()); //返回null
+  }
 }
 ```
 
@@ -269,22 +275,22 @@ public class WeakReferenceExample {
 JDK源码：
 ```java
         /**
-         * The entries in this hash map extend WeakReference, using
-         * its main ref field as the key (which is always a
-         * ThreadLocal object).  Note that null keys (i.e. entry.get()
-         * == null) mean that the key is no longer referenced, so the
-         * entry can be expunged from table.  Such entries are referred to
-         * as "stale entries" in the code that follows.
-         */
-        static class Entry extends WeakReference<ThreadLocal<?>> {
-            /** The value associated with this ThreadLocal. */
-            Object value;
+ * The entries in this hash map extend WeakReference, using
+ * its main ref field as the key (which is always a
+ * ThreadLocal object).  Note that null keys (i.e. entry.get()
+ * == null) mean that the key is no longer referenced, so the
+ * entry can be expunged from table.  Such entries are referred to
+ * as "stale entries" in the code that follows.
+ */
+static class Entry extends WeakReference<ThreadLocal<?>> {
+  /** The value associated with this ThreadLocal. */
+  Object value;
 
-            Entry(ThreadLocal<?> k, Object v) {
-                super(k);
-                value = v;
-            }
-        }
+  Entry(ThreadLocal<?> k, Object v) {
+    super(k);
+    value = v;
+  }
+}
 ```
 
 我们先做个假设，哪怕这个WeakReference生效了 ，就是GC后回收了key，但是value是强引用（只有被super(k)框住的才是弱引用😥）。一般来说ThreadLocal作为key本身是不太占用内存的，但是value是用户传值，占用内存可能会很大，因此我们需要及时清理value。
@@ -307,64 +313,64 @@ JDK源码：
   - 如果key为null，直接替换value ， 如果需要扩容，清理所有key为null的entry
 - get: 获取值
   - 如果entry的key为null，删除entry
-  
+
 实现代码：
 ```java
 /**
  * 取消hash冲突的实现，简单使用List保存Entry
  */
 class ThreadLocalMap {
-    //照搬ThreadLocalMap.Entry
-    static class Entry extends WeakReference<ThreadLocalInf<?>> {
-        Object value;
+  //照搬ThreadLocalMap.Entry
+  static class Entry extends WeakReference<ThreadLocalInf<?>> {
+    Object value;
 
-        Entry(ThreadLocalInf<?> k, Object v) {
-            super(k);
-            value = v;
+    Entry(ThreadLocalInf<?> k, Object v) {
+      super(k);
+      value = v;
+    }
+
+  }
+
+  private final List<Entry> table = new ArrayList<>();
+
+  private int getIndex(ThreadLocalInf<?> key) {
+    return key.hashCode();
+  }
+
+  public Object get(ThreadLocalInf<?> key) {
+    return getByIndex(getIndex(key));
+  }
+
+  public Object getByIndex(int index) {
+    Entry entry = table.get(index);
+    if (entry == null) {
+      return null;
+    }
+    if (entry.get() == null) {
+      entry.value = null;
+      table.remove(entry);
+      return null;
+    } else {
+      return entry.value;
+    }
+  }
+
+  /**
+   * 扩容时清理无效的Entry
+   */
+  public void put(ThreadLocalInf<?> key, Object value) {
+    int index = getIndex(key);
+    // 扩容
+    while (table.size() <= index) {
+      table.add(null);
+      for (int i = 0; i < table.size(); i++) {
+        if (table.get(i) != null && table.get(i).get() == null) {
+          table.set(i, null);
         }
-
+      }
     }
-
-    private final List<Entry> table = new ArrayList<>();
-
-    private int getIndex(ThreadLocalInf<?> key) {
-        return key.hashCode();
-    }
-
-    public Object get(ThreadLocalInf<?> key) {
-        return getByIndex(getIndex(key));
-    }
-
-    public Object getByIndex(int index) {
-        Entry entry = table.get(index);
-        if (entry == null) {
-            return null;
-        }
-        if (entry.get() == null) {
-            entry.value = null;
-            table.remove(entry);
-            return null;
-        } else {
-            return entry.value;
-        }
-    }
-
-    /**
-     * 扩容时清理无效的Entry
-     */
-    public void put(ThreadLocalInf<?> key, Object value) {
-        int index = getIndex(key);
-        // 扩容
-        while (table.size() <= index) {
-            table.add(null);
-            for (int i = 0; i < table.size(); i++) {
-                if (table.get(i) != null && table.get(i).get() == null) {
-                    table.set(i, null);
-                }
-            }
-        }
-        table.set(index, new Entry(key, value));
-    }
+    table.set(index, new Entry(key, value));
+  }
 }
 
 /**
@@ -372,49 +378,49 @@ class ThreadLocalMap {
  */
 class MyThread3 extends Thread {
 
-    ThreadLocalMap threadLocalMap = new ThreadLocalMap();
+  ThreadLocalMap threadLocalMap = new ThreadLocalMap();
 
-    public MyThread3(Runnable runnable) {
-        super(runnable);
-    }
+  public MyThread3(Runnable runnable) {
+    super(runnable);
+  }
 }
 
 
 public class MyThreadLocal3<T> implements ThreadLocalInf<T> {
-    private static final AtomicInteger nextId = new AtomicInteger(0);
-    private final int id = nextId.getAndIncrement();
+  private static final AtomicInteger nextId = new AtomicInteger(0);
+  private final int id = nextId.getAndIncrement();
 
-    @Override
-    public int hashCode() {
-        return id;
-    }
+  @Override
+  public int hashCode() {
+    return id;
+  }
 
-    @Override
-    public boolean equals(Object obj) {
-        return this == obj;
-    }
+  @Override
+  public boolean equals(Object obj) {
+    return this == obj;
+  }
 
-    @Override
-    public void set(T value) {
-        Thread thread = Thread.currentThread();
-        if (thread instanceof MyThread3) {
-            MyThread3 myThread = (MyThread3) thread;
-            myThread.threadLocalMap.put(this, value);
-        } else {
-            throw new UnsupportedOperationException();
-        }
+  @Override
+  public void set(T value) {
+    Thread thread = Thread.currentThread();
+    if (thread instanceof MyThread3) {
+      MyThread3 myThread = (MyThread3) thread;
+      myThread.threadLocalMap.put(this, value);
+    } else {
+      throw new UnsupportedOperationException();
     }
+  }
 
-    @Override
-    public T get() {
-        Thread thread = Thread.currentThread();
-        if (thread instanceof MyThread3) {
-            MyThread3 myThread = (MyThread3) thread;
-            return (T) myThread.threadLocalMap.get(this);
-        } else {
-            throw new UnsupportedOperationException();
-        }
+  @Override
+  public T get() {
+    Thread thread = Thread.currentThread();
+    if (thread instanceof MyThread3) {
+      MyThread3 myThread = (MyThread3) thread;
+      return (T) myThread.threadLocalMap.get(this);
+    } else {
+      throw new UnsupportedOperationException();
     }
+  }
 
 }
 
