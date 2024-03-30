@@ -5,6 +5,7 @@ highlight: a11y-dark
 
 # 手写ThreadLocal
 
+> 声明： 本文使用JDK11，threadLocal场景下应该和JDK8没有差异，习惯使然
 # 前言
 还在面试的前一天上班囫囵吞枣找资料？还在面试前一晚辗转难眠？还在去面试的路上因为准备不足而忐忑不安？还在每次面试后因为面试官问的问题太刁钻而破口大骂？今天，教你手把手实现ThreadLocal，以后面试吊打面试官，脚踢HR🤣😁。
 
@@ -19,7 +20,7 @@ highlight: a11y-dark
 - 事务管理；保存事务上下文，方便回滚
 - 动态数据源切换；
 
-## 
+## 基本用法
 
 ```java
 public class Test0 {
@@ -238,12 +239,17 @@ ThreadLocal可能就是这么简单，但一旦到了面试的场景，防止面
 
 内存泄漏简单来说就是不再使用的内存无法被回收，导致内存占用越来越大，最终导致OOM（Out of Memory 内存溢出）。
 
-我们经常使用的springboot每个请求都会使用一个线程，请求结束后线程并不会销毁，而是放到线程池中，等待下一次请求；如果在这个请求结束前，你保存了大量的数据到ThreadLocal中，但没有主动remove，而且这个Thread由于使用的是线程池，是会一直存在的，它所保存的threadLocals的对象也会一直存在。那么这部分数据就会一直存在内存中，从而很容易导致内存泄漏
+我们经常使用的springboot每个请求都会使用一个线程，请求结束后线程并不会销毁，而是放到线程池中，等待下一次请求；如果在这个请求结束前，你保存了大量的数据到ThreadLocal中，但没有主动remove，而且这个Thread由于使用的是线程池，是会一直存在的，它所保存的threadLocals的对象也会一直存在。那么这部分数据就会一直存在内存中，从而很容易导致内存泄漏。
 
-为了应对这种情况ThreadLocalMap中的Entry继承了WeakReference，这样一旦发生GC，并且ThreadLocal没有其他强引用，ThreadLocalMap中的Entry的key就会被回收（等同于调用weakReference.clear()）变为null。
+因此内存泄漏通常是因为我们没有主动remove。弱引用在清理内存上面只起到了很小的作用，如果开发的过程中主动remove，那么完全可以不用弱引用。
+
+### ThreadLocal中弱引用的作用，以及ThreadLocal对弱引用的后续处理
+
+简单来说，发生GC后，并且ThreadLocal没有其他强引用，ThreadLocalMap中的Entry的key就会被回收（等同于调用weakReference.clear()）变为null。
 > 这里说一下题外话，我们一般使用ThreadLocal 会这么定义：public static final ThreadLocal<String> local = new ThreadLocal<>(); 这样做相当于加了个不可更改的强引用，因此，ThreadLocalMap中的Entry的key是不会被回收；所以我认为开发的过程中不必太在意这个Entry中的WeakReference。
 
-这里再贴一下WeakReference生效的例子:
+这里示范一下使用弱引用的例子
+
 例子代码：
 ```java
 /**
@@ -263,14 +269,9 @@ public class WeakReferenceExample {
   }
 }
 ```
+必须手动str = null; 弱引用才能生效。也就是gc后清理没有强引用的对象。
 
 如果返回null，那么就是弱引用里面的对象被回收了。
-
-
-
-### ThreadLocal中弱引用的作用，以及ThreadLocal对弱引用的后续处理
-通过上面的解释，相信你也知道这个WeakReference的确没什么用了😎（可能有但是我的使用场景用不上）。 但有时面试官可能会不依不饶，虽然我很想回答没啥用。但如果你想吹多一点接着往下看。
-我们先看看它的源码
 
 JDK源码：
 ```java
@@ -292,14 +293,13 @@ static class Entry extends WeakReference<ThreadLocal<?>> {
   }
 }
 ```
-
-我们先做个假设，哪怕这个WeakReference生效了 ，就是GC后回收了key，但是value是强引用（只有被super(k)框住的才是弱引用😥）。一般来说ThreadLocal作为key本身是不太占用内存的，但是value是用户传值，占用内存可能会很大，因此我们需要及时清理value。
-
-那么ThreadLocal是如何清理掉没用的value的？
+我们先做个假设，哪怕这个WeakReference生效了 ，就是GC后回收了key，但是value是强引用（只有被super(k)框住的才是弱引用😥）。一般来说ThreadLocal作为key本身是不太占用内存的，但是value是用户传值，占用内存可能会很大，那么ThreadLocal是如何自动清理掉没用的value的？
 
 这里先说结论，ThreadLocal调用get()或者set()或者内部map触发扩容的时候，都会检查对应的key是否为null，如果是null，就会把这个Entry的value置为null;
 
 感兴趣的话可以阅读下源码ThreadLocal 里面的 expungeStaleEntry，它的作用除了清除key为空的entry外还重新排列与被清空的key产生hash冲突的元素的索引，这里就不贴了代码了，免得你们以为我刷字数。
+
+通过上面的解释，相信你也知道这个WeakReference的确没什么用了😎（可能有但是我的使用场景用不上）。
 
 ### 版本-03代码实现
 
@@ -425,5 +425,7 @@ public class MyThreadLocal3<T> implements ThreadLocalInf<T> {
 }
 
 ```
-以上就是最终的版本实现 ， 有兴趣可以参考上述版本02做一些测试。
+以上就是最终的版本实现，上面的代码还有缺陷，就是list会无限扩容，有兴趣的可以自行优化下，思路就是新增ThreadLocal的时候给个最小的可用索引。
+
+有兴趣可以参考上述版本02做一些测试。
 上述代码参考了netty源码中的 io.netty.util.concurrent.FastThreadLocal ，它也是使用数组实现，不存在hash冲突。有兴趣的同学可以去学习一下
