@@ -56,3 +56,4 @@ out/
 .idea/
 .iml
 target/
+output.bin
