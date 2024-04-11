@@ -36,7 +36,7 @@ public class Int32DataWriter {
             }
             dos.flush();
         } catch (IOException e) {
-            log.error("");
+            log.error("", e);
         }
     }
 

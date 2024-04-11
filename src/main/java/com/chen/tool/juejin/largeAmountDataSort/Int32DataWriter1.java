@@ -60,7 +60,7 @@ public class Int32DataWriter1 {
         }
         return list;
     }
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         int int32Num = (int) Math.pow(10, 8); // 10亿个int32整数 = 4gb
         long m1 = System.currentTimeMillis();
         buildNInt32(int32Num, filePath);
