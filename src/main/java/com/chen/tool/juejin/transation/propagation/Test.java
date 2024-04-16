@@ -33,6 +33,19 @@ public class Test {
      */
     private static final Propagation notSupported = Propagation.NOT_SUPPORTED;
 
+    /**
+     * 应用场景：
+     * 1.对于某些涉及长时间I/O操作/或者其他耗时的方法，避免加入任何事务。属于预防性使用
+     */
+    private static final Propagation never = Propagation.NEVER;
+
+    /**
+     * 作用：必须加入事务
+     * 批量插入时插入id的方法或则编码的方法
+     */
+    private static final Propagation mandatory = Propagation.MANDATORY;
+
+
     public static void main(String[] args) {
 
 
