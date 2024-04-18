@@ -46,6 +46,7 @@ public class MyCopyOnWriteList<T> {
             });
 
         }
+        // 等待2秒
         TimeUnit.SECONDS.sleep(2);
 
         // 理想值返回1000 ， 若使用ArrayList则会返回小于1000的值
