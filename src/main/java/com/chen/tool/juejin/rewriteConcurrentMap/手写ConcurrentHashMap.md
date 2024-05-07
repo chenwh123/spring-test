@@ -156,6 +156,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                 break;
             else if (tab == table) { 
                 int rs = resizeStamp(n);
+                // (rs << RESIZE_STAMP_SHIFT) + 2) 必然为负数
                 if (U.compareAndSetInt(this, SIZECTL, sc,
                         (rs << RESIZE_STAMP_SHIFT) + 2))
                     transfer(tab, null);
