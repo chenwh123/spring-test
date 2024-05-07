@@ -12,6 +12,46 @@
 ```java
 public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         implements ConcurrentMap<K,V>, Serializable {
+    /**
+     * Table initialization and resizing control.  When negative, the
+     * table is being initialized or resized: -1 for initialization,
+     * else -(1 + the number of active resizing threads).  Otherwise,
+     * when table is null, holds the initial table size to use upon
+     * creation, or 0 for default. After initialization, holds the
+     * next element count value upon which to resize the table.
+     * 
+     * 基本等同数组长度
+     */
+    private transient volatile int sizeCtl;
+
+    /**
+     * Creates a new, empty map with an initial table size based on
+     * the given number of elements ({@code initialCapacity}), initial
+     * table density ({@code loadFactor}), and number of concurrently
+     * updating threads ({@code concurrencyLevel}).
+     *
+     * @param initialCapacity the initial capacity. The implementation
+     * performs internal sizing to accommodate this many elements,
+     * given the specified load factor.
+     * @param loadFactor the load factor (table density) for
+     * establishing the initial table size //因子，默认0.75，因子越大空位越多（没啥用，一般只用于初始化）
+     * @param concurrencyLevel the estimated number of concurrently
+     * updating threads. The implementation may use this value as
+     * a sizing hint. //最小数组长度（没啥用，一般为1）
+     *                         
+     */
+    public ConcurrentHashMap(int initialCapacity,
+                             float loadFactor, int concurrencyLevel) {
+        if (!(loadFactor > 0.0f) || initialCapacity < 0 || concurrencyLevel <= 0)
+            throw new IllegalArgumentException();
+        if (initialCapacity < concurrencyLevel)   // Use at least as many bins
+            initialCapacity = concurrencyLevel;   // as estimated threads
+        long size = (long)(1.0 + (long)initialCapacity / loadFactor);
+        int cap = (size >= (long)MAXIMUM_CAPACITY) ?
+                MAXIMUM_CAPACITY : tableSizeFor((int)size);
+        this.sizeCtl = cap;
+    }
+    
     // ...
     final V putVal(K key, V value, boolean onlyIfAbsent) {
         if (key == null || value == null) throw new NullPointerException();
@@ -80,6 +120,47 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         }
         addCount(1L, binCount); // 尝试扩容
         return null;
+    }
+
+    /**
+     * 尝试扩容到指定的大小，非2^n则自动扩大到2^n
+     * 
+     * Tries to presize table to accommodate the given number of elements.
+     * @param size number of elements (doesn't need to be perfectly accurate)
+     */
+    private final void tryPresize(int size) {
+        // c： 期望的数组大小，必然为2^n
+        int c = (size >= (MAXIMUM_CAPACITY >>> 1)) ? MAXIMUM_CAPACITY :
+                tableSizeFor(size + (size >>> 1) + 1); 
+        int sc; 
+        while ((sc = sizeCtl) >= 0) {
+            Node<K,V>[] tab = table; int n;
+            if (tab == null || (n = tab.length) == 0) { //执行数组初始化
+                // 实际的数组长度，这里n可能并非是2^n ? 
+                n = (sc > c) ? sc : c; // max(sc,c);
+                if (U.compareAndSetInt(this, SIZECTL, sc, -1)) { //设置为resize状态
+                    try {
+                        if (table == tab) { // 重新判断数组是否为空
+//                            @SuppressWarnings("unchecked")
+//                            Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n];
+//                            table = nt;
+                            table = (Node<K,V>[])new Node<?,?>[n];
+                            sc = n - (n >>> 2); // 相当于 n*0.75
+                        }
+                    } finally { // 恢复状态
+                        sizeCtl = sc;
+                    }
+                }
+            }
+            else if (c <= sc || n >= MAXIMUM_CAPACITY) // 唯一可以退出循环的行
+                break;
+            else if (tab == table) { 
+                int rs = resizeStamp(n);
+                if (U.compareAndSetInt(this, SIZECTL, sc,
+                        (rs << RESIZE_STAMP_SHIFT) + 2))
+                    transfer(tab, null);
+            }
+        }
     }
     //...
 }
