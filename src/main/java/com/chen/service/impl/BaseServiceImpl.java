@@ -135,7 +135,7 @@ public class BaseServiceImpl<M extends BaseMapper<O> ,O> extends ServiceImpl<M, 
                 String[] param = PATTERN_SPACE.split(order);
                 //不填或者带有asc结尾代表该列升序
                 boolean isAsc = param.length == 1 || StringUtils.equalsAnyIgnoreCase("asc", param[1]);
-                OrderItem orderItem = new OrderItem(tableFieldMap.getOrDefault(param[0], param[0]), isAsc);
+                OrderItem orderItem = new OrderItem().setColumn(tableFieldMap.getOrDefault(param[0], param[0])).setAsc(isAsc);
                 list.add(orderItem);
             }
             page.setOrders(list);

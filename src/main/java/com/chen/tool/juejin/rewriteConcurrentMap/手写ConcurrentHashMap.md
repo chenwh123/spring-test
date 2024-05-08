@@ -25,6 +25,50 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     private transient volatile int sizeCtl;
 
     /**
+     * The next table to use; non-null only while resizing.
+     * 扩容时用到的新数组，非扩容状态一般为空值
+     */
+    private transient volatile Node<K,V>[] nextTable;
+
+    /**
+     * The number of bits used for generation stamp in sizeCtl.
+     * Must be at least 6 for 32bit arrays.
+     */
+    private static final int RESIZE_STAMP_BITS = 16;
+    
+    /**
+     * The maximum number of threads that can help resize.
+     * Must fit in 32 - RESIZE_STAMP_BITS bits.
+     * 最大的扩容线程数， 这里只关心二进制的1的数量，因此是16
+     * 默认值： 0b 0000 0000 0000 0000 1111 1111 1111 1111
+     * 
+     */
+    private static final int MAX_RESIZERS = (1 << (32 - RESIZE_STAMP_BITS)) - 1;
+
+
+    /**
+     * The next table index (plus one) to split while resizing.
+     */
+    private transient volatile int transferIndex;
+    /**
+     * Minimum number of rebinnings per transfer step. Ranges are
+     * subdivided to allow multiple resizer threads.  This value
+     * serves as a lower bound to avoid resizers encountering
+     * excessive memory contention.  The value should be at least
+     * DEFAULT_CAPACITY.
+     */
+    private static final int MIN_TRANSFER_STRIDE = 16;
+    
+
+
+    
+    /**
+     * 核心*2 = 逻辑线程数
+     * 8核则返回16
+     */
+    static final int NCPU = Runtime.getRuntime().availableProcessors();
+
+    /**
      * Creates a new, empty map with an initial table size based on
      * the given number of elements ({@code initialCapacity}), initial
      * table density ({@code loadFactor}), and number of concurrently
@@ -123,6 +167,189 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     }
 
     /**
+     * Returns a power of two table size for the given desired capacity.
+     * Integer.numberOfLeadingZeros(n) 取值范围为 0~32
+     * 返回值 0000 0000 0000 0000 1000 0000 001x xxxx
+     
+     * 
+     */
+    static final int resizeStamp(int n) {
+        return Integer.numberOfLeadingZeros(n) 
+                | (1 << (RESIZE_STAMP_BITS - 1)) // 32位二进制，第16位放个1，外层使用时一般会 <<16 这个1会放到首位（符号位）
+                ;
+    }
+
+    /**
+     * Helps transfer if a resize is in progress.
+     * 帮助扩容
+     * 使用场景： put , compute , replace , clear等
+     * 
+     */
+    final Node<K,V>[] helpTransfer(Node<K,V>[] tab, Node<K,V> f) {
+        Node<K,V>[] nextTab; int sc;
+        if (tab != null && (f instanceof ForwardingNode) &&
+                (nextTab = ((ForwardingNode<K,V>)f).nextTable) != null) {
+            int rs = resizeStamp(tab.length) << RESIZE_STAMP_SHIFT;
+            while (nextTab == nextTable && table == tab &&
+                    (sc = sizeCtl) < 0) { //判断是否正在扩容
+                if (sc == rs + MAX_RESIZERS  // 扩容线程满了
+                        || sc == rs + 1  // 当前线程已在扩容?
+                        || transferIndex <= 0)  // ?
+                    break;
+                if (U.compareAndSetInt(this, SIZECTL, sc, sc + 1)) { //扩容位+1
+                    transfer(tab, nextTab); //开始扩容
+                    break;
+                }
+            }
+            return nextTab;
+        }
+        return table;
+    }
+
+    /**
+     * Moves and/or copies the nodes in each bin to new table. See
+     * above for explanation.
+     * @param nextTab 新的数组，空则创建
+     * @param tab 当前数组
+     */
+    private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
+        // 当前数组长度
+        int n = tab.length;
+        int stride; //步长 =  min(tab.len/(8*线程数),16)
+        if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) < MIN_TRANSFER_STRIDE)
+            stride = MIN_TRANSFER_STRIDE; // subdivide range
+        if (nextTab == null) {            // initiating
+            try {
+//                @SuppressWarnings("unchecked")
+//                Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n << 1];
+//                nextTab = nt;
+                nextTab = (Node<K,V>[])new Node<?,?>[n << 1];
+            } catch (Throwable ex) {      // try to cope with OOME
+                sizeCtl = Integer.MAX_VALUE;
+                return;
+            }
+            nextTable = nextTab;
+            transferIndex = n;
+        }
+        int nextn = nextTab.length;
+        // 随便创建一个节点
+        ForwardingNode<K,V> fwd = new ForwardingNode<K,V>(nextTab);
+        boolean advance = true;
+        boolean finishing = false; // to ensure sweep before committing nextTab
+        for (int i = 0, bound = 0;;) {
+            Node<K,V> f; int fh;
+            while (advance) {
+                int nextIndex, nextBound;
+                if (--i >= bound || finishing)
+                    advance = false;
+                else if ((nextIndex = transferIndex) <= 0) {
+                    i = -1;
+                    advance = false;
+                }
+                else if (U.compareAndSetInt
+                        (this, TRANSFERINDEX, nextIndex,
+                                nextBound = (nextIndex > stride ?
+                                        nextIndex - stride : 0))) {
+                    bound = nextBound;
+                    i = nextIndex - 1;
+                    advance = false;
+                }
+            }
+            if (i < 0 || i >= n || i + n >= nextn) {
+                int sc;
+                if (finishing) {
+                    nextTable = null;
+                    table = nextTab;
+                    sizeCtl = (n << 1) - (n >>> 1);
+                    return;
+                }
+                if (U.compareAndSetInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
+                    if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT)
+                        return;
+                    finishing = advance = true;
+                    i = n; // recheck before commit
+                }
+            }
+            else if ((f = tabAt(tab, i)) == null)
+                advance = casTabAt(tab, i, null, fwd);
+            else if ((fh = f.hash) == MOVED)
+                advance = true; // already processed
+            else {
+                synchronized (f) {
+                    if (tabAt(tab, i) == f) {
+                        Node<K,V> ln, hn;
+                        if (fh >= 0) {
+                            int runBit = fh & n;
+                            Node<K,V> lastRun = f;
+                            for (Node<K,V> p = f.next; p != null; p = p.next) {
+                                int b = p.hash & n;
+                                if (b != runBit) {
+                                    runBit = b;
+                                    lastRun = p;
+                                }
+                            }
+                            if (runBit == 0) {
+                                ln = lastRun;
+                                hn = null;
+                            }
+                            else {
+                                hn = lastRun;
+                                ln = null;
+                            }
+                            for (Node<K,V> p = f; p != lastRun; p = p.next) {
+                                int ph = p.hash; K pk = p.key; V pv = p.val;
+                                if ((ph & n) == 0)
+                                    ln = new Node<K,V>(ph, pk, pv, ln);
+                                else
+                                    hn = new Node<K,V>(ph, pk, pv, hn);
+                            }
+                            setTabAt(nextTab, i, ln);
+                            setTabAt(nextTab, i + n, hn);
+                            setTabAt(tab, i, fwd);
+                            advance = true;
+                        }
+                        else if (f instanceof TreeBin) {
+                            TreeBin<K,V> t = (TreeBin<K,V>)f;
+                            TreeNode<K,V> lo = null, loTail = null;
+                            TreeNode<K,V> hi = null, hiTail = null;
+                            int lc = 0, hc = 0;
+                            for (Node<K,V> e = t.first; e != null; e = e.next) {
+                                int h = e.hash;
+                                TreeNode<K,V> p = new TreeNode<K,V>
+                                        (h, e.key, e.val, null, null);
+                                if ((h & n) == 0) {
+                                    if ((p.prev = loTail) == null)
+                                        lo = p;
+                                    else
+                                        loTail.next = p;
+                                    loTail = p;
+                                    ++lc;
+                                }
+                                else {
+                                    if ((p.prev = hiTail) == null)
+                                        hi = p;
+                                    else
+                                        hiTail.next = p;
+                                    hiTail = p;
+                                    ++hc;
+                                }
+                            }
+                            ln = (lc <= UNTREEIFY_THRESHOLD) ? untreeify(lo) :
+                                    (hc != 0) ? new TreeBin<K,V>(lo) : t;
+                            hn = (hc <= UNTREEIFY_THRESHOLD) ? untreeify(hi) :
+                                    (lc != 0) ? new TreeBin<K,V>(hi) : t;
+                            setTabAt(nextTab, i, ln);
+                            setTabAt(nextTab, i + n, hn);
+                            setTabAt(tab, i, fwd);
+                            advance = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * 尝试扩容到指定的大小，非2^n则自动扩大到2^n
      * 
      * Tries to presize table to accommodate the given number of elements.
@@ -157,6 +384,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
             else if (tab == table) { 
                 int rs = resizeStamp(n);
                 // (rs << RESIZE_STAMP_SHIFT) + 2) 必然为负数
+                // sc 当前值必然大于0 
                 if (U.compareAndSetInt(this, SIZECTL, sc,
                         (rs << RESIZE_STAMP_SHIFT) + 2))
                     transfer(tab, null);
