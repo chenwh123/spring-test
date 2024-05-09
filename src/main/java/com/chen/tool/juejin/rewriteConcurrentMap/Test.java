@@ -6,7 +6,9 @@ import com.chen.jatool.common.utils.BinaryUtils;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 
 public class Test {
@@ -18,18 +20,18 @@ public class Test {
 
     public static void main(String[] args) throws Exception {
         Map<String, Object> temp = new HashMap<>();
-        int i  = 0;
-        for (; i < 16; i++) {
-            temp.put("123" + i, 1);
-            if (i == 15) {
-                break;
-            }
-        }
         ConcurrentHashMap<String, Object> map = new ConcurrentHashMap<>(temp);
+        for (int i1 = 0; i1 < 10; i1++) {
+            final int i = i1;
+            CompletableFuture.runAsync(() -> {
+                map.put("1234" + i, 1);
+                System.out.println(Thread.currentThread().hashCode());
+            });
+        }
+        TimeUnit.SECONDS.sleep(1);
 
-        System.out.println(BinaryUtils.toPretty0xb(1 << 31));
-        System.out.println(BinaryUtils.toPretty0xb((1 << 31) + 1));
-        System.out.println(BinaryUtils.toPretty0xb((1 << 31) + 2));
+
+
 
 
     }

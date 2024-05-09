@@ -62,6 +62,15 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
 
 
     /**
+     * Base counter value, used mainly when there is no contention,
+     * but also as a fallback during table initialization
+     * races. Updated via CAS.
+     * 表示当前map元素数量，多线程环境下需要加上counterCells的值
+     */
+    private transient volatile long baseCount;
+
+
+    /**
      * The smallest table capacity for which bins may be treeified.
      * (Otherwise the table is resized if too many nodes in a bin.)
      * The value should be at least 4 * TREEIFY_THRESHOLD to avoid
@@ -176,6 +185,135 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     }
 
     /**
+     * Adds to count, and if table is too small and not already
+     * resizing, initiates transfer. If already resizing, helps
+     * perform transfer if work is available.  Rechecks occupancy
+     * after a transfer to see if another resize is already needed
+     * because resizings are lagging additions.
+     *
+     * @param x the count to add
+     * @param check if <0, don't check resize, if <= 1 only check if uncontended
+     */
+    private final void addCount(long x, int check) {
+        // 单线程环境下cs并不会赋值
+        CounterCell[] cs; long b, s;
+        if ((cs = counterCells) != null ||
+                !U.compareAndSetLong(this, BASECOUNT, b = baseCount, s = b + x)) {
+            // 多线程竞争希望设置baseCount ，则会进入该方法
+            CounterCell c; long v; int m;
+            boolean uncontended = true;
+            if (cs == null || (m = cs.length - 1) < 0 ||
+                    (c = cs[ThreadLocalRandom.getProbe() & m]) == null ||
+                    !(uncontended =
+                            U.compareAndSetLong(c, CELLVALUE, v = c.value, v + x))) {
+                fullAddCount(x, uncontended);
+                return;
+            }
+            if (check <= 1)
+                return;
+            s = sumCount();
+        }
+        if (check >= 0) {
+            Node<K,V>[] tab, nt; int n, sc;
+            while (s >= (long)(sc = sizeCtl) && (tab = table) != null &&
+                    (n = tab.length) < MAXIMUM_CAPACITY) {
+                int rs = resizeStamp(n) << RESIZE_STAMP_SHIFT;
+                if (sc < 0) {
+                    if (sc == rs + MAX_RESIZERS || sc == rs + 1 ||
+                            (nt = nextTable) == null || transferIndex <= 0)
+                        break;
+                    if (U.compareAndSetInt(this, SIZECTL, sc, sc + 1))
+                        transfer(tab, nt);
+                }
+                else if (U.compareAndSetInt(this, SIZECTL, sc, rs + 2))
+                    transfer(tab, null);
+                s = sumCount();
+            }
+        }
+    }
+
+    /**
+     *
+     */
+    private final void fullAddCount(long x, boolean wasUncontended) {
+        int h;
+        if ((h = ThreadLocalRandom.getProbe()) == 0) {
+            // 初始化线程的probe值，其实相当于线程hash值，只不过这个hash值有必要时可以主动改变
+            ThreadLocalRandom.localInit();      // force initialization
+            h = ThreadLocalRandom.getProbe();
+            wasUncontended = true;
+        }
+        boolean collide = false;                // True if last slot nonempty
+        for (;;) {
+            CounterCell[] cs; CounterCell c; int n; long v;
+            if ((cs = counterCells) != null && (n = cs.length) > 0) {
+                if ((c = cs[(n - 1) & h]) == null) {
+                    if (cellsBusy == 0) {            // Try to attach new Cell
+                        CounterCell r = new CounterCell(x); // Optimistic create
+                        if (cellsBusy == 0 &&
+                                U.compareAndSetInt(this, CELLSBUSY, 0, 1)) {
+                            boolean created = false;
+                            try {               // Recheck under lock
+                                CounterCell[] rs; int m, j;
+                                if ((rs = counterCells) != null &&
+                                        (m = rs.length) > 0 &&
+                                        rs[j = (m - 1) & h] == null) {
+                                    rs[j] = r;
+                                    created = true;
+                                }
+                            } finally {
+                                cellsBusy = 0;
+                            }
+                            if (created)
+                                break;
+                            continue;           // Slot is now non-empty
+                        }
+                    }
+                    collide = false;
+                }
+                else if (!wasUncontended)       // CAS already known to fail
+                    wasUncontended = true;      // Continue after rehash
+                else if (U.compareAndSetLong(c, CELLVALUE, v = c.value, v + x))
+                    break;
+                else if (counterCells != cs || n >= NCPU)
+                    collide = false;            // At max size or stale
+                else if (!collide)
+                    collide = true;
+                else if (cellsBusy == 0 &&
+                        U.compareAndSetInt(this, CELLSBUSY, 0, 1)) {
+                    try {
+                        if (counterCells == cs) // Expand table unless stale
+                            counterCells = Arrays.copyOf(cs, n << 1);
+                    } finally {
+                        cellsBusy = 0;
+                    }
+                    collide = false;
+                    continue;                   // Retry with expanded table
+                }
+                h = ThreadLocalRandom.advanceProbe(h);
+            }
+            else if (cellsBusy == 0 && counterCells == cs &&
+                    U.compareAndSetInt(this, CELLSBUSY, 0, 1)) {
+                boolean init = false;
+                try {                           // Initialize table
+                    if (counterCells == cs) {
+                        CounterCell[] rs = new CounterCell[2];
+                        rs[h & 1] = new CounterCell(x);
+                        counterCells = rs;
+                        init = true;
+                    }
+                } finally {
+                    cellsBusy = 0;
+                }
+                if (init)
+                    break;
+            }
+            else if (U.compareAndSetLong(this, BASECOUNT, v = baseCount, v + x))
+                break;                          // Fall back on using base
+        }
+    }
+
+    /**
      * Replaces all linked nodes in bin at given index unless table is
      * too small, in which case resizes instead.
      */
@@ -232,7 +370,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
             while (nextTab == nextTable && table == tab &&
                     (sc = sizeCtl) < 0) { //判断是否正在扩容
                 if (sc == rs + MAX_RESIZERS  // 扩容线程满了
-                        || sc == rs + 1  // 当前线程已在扩容?
+                        || sc == rs + 1  // 当前线程扩容即将结束
                         || transferIndex <= 0)  // 需要扩容的下标已经分配完毕，或者已经扩容结束
                     break;
                 if (U.compareAndSetInt(this, SIZECTL, sc, sc + 1)) { //扩容位+1
@@ -322,7 +460,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                     if (tabAt(tab, i) == f) {
                         Node<K,V> ln, hn;
                         if (fh >= 0) {
-                            // <-- 这里一段仅用于减少new Node的操作，提高性能；实际上可以删掉
+                            // <-- 这里一段仅用于减少new Node的操作，提高性能；实际删掉这段对逻辑影响不大
                             int runBit = fh & n;
                             Node<K,V> lastRun = f;
                             for (Node<K,V> p = f.next; p != null; p = p.next) {
