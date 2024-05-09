@@ -69,6 +69,16 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
      */
     private transient volatile long baseCount;
 
+    /**
+     * Table of counter cells. When non-null, size is a power of 2.
+     */
+    private transient volatile CounterCell[] counterCells;
+
+    /**
+     * Spinlock (locked via CAS) used when resizing and/or creating CounterCells.
+     */
+    private transient volatile int cellsBusy;
+
 
     /**
      * The smallest table capacity for which bins may be treeified.
@@ -233,7 +243,8 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     }
 
     /**
-     *
+     * @param x the count to add
+     * @param wasUncontended 代表对counterCell的竞争状态，如果为false，则代表是多线程竞争 ， true则无竞争
      */
     private final void fullAddCount(long x, boolean wasUncontended) {
         int h;
