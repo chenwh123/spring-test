@@ -3,9 +3,7 @@ package com.chen.tool.juejin.rewriteConcurrentMap;
 
 import com.chen.jatool.common.utils.BinaryUtils;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -21,14 +19,19 @@ public class Test {
     public static void main(String[] args) throws Exception {
         Map<String, Object> temp = new HashMap<>();
         ConcurrentHashMap<String, Object> map = new ConcurrentHashMap<>(temp);
-        for (int i1 = 0; i1 < 10; i1++) {
+        List<CompletableFuture> list = new ArrayList<>();
+        for (int i1 = 0; i1 < 15; i1++) {
             final int i = i1;
-            CompletableFuture.runAsync(() -> {
+            CompletableFuture<Void> com = CompletableFuture.runAsync(() -> {
                 map.put("1234" + i, 1);
-                System.out.println(Thread.currentThread().hashCode());
             });
+            list.add(com);
         }
-        TimeUnit.SECONDS.sleep(1);
+
+
+        for (CompletableFuture future : list) {
+            future.join();
+        }
 
 
 

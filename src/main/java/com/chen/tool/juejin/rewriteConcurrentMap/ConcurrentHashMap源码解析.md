@@ -257,6 +257,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         boolean collide = false;                // True if last slot nonempty
         for (;;) {
             CounterCell[] cs; CounterCell c; int n; long v;
+            // 判断CounterCell 是否有初始化
             if ((cs = counterCells) != null && (n = cs.length) > 0) {
                 if ((c = cs[(n - 1) & h]) == null) {
                     if (cellsBusy == 0) {            // Try to attach new Cell
