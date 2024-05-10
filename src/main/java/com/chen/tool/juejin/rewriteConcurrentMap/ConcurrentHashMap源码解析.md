@@ -76,6 +76,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
 
     /**
      * Spinlock (locked via CAS) used when resizing and/or creating CounterCells.
+     * 自旋锁，只有0，1两个值，1表示上锁
      */
     private transient volatile int cellsBusy;
 
@@ -264,20 +265,21 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                         CounterCell r = new CounterCell(x); // Optimistic create
                         if (cellsBusy == 0 &&
                                 U.compareAndSetInt(this, CELLSBUSY, 0, 1)) {
-                            boolean created = false;
+//                            boolean created = false;
                             try {               // Recheck under lock
                                 CounterCell[] rs; int m, j;
-                                if ((rs = counterCells) != null &&
-                                        (m = rs.length) > 0 &&
-                                        rs[j = (m - 1) & h] == null) {
+                                if ((rs = counterCells) != null
+                                        && (m = rs.length) > 0
+                                        && rs[j = (m - 1) & h] == null) {
                                     rs[j] = r;
-                                    created = true;
+                                    break;
+//                                    created = true;
                                 }
                             } finally {
                                 cellsBusy = 0;
                             }
-                            if (created)
-                                break;
+//                            if (created)
+//                                break;
                             continue;           // Slot is now non-empty
                         }
                     }
@@ -306,21 +308,24 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
             }
             else if (cellsBusy == 0 && counterCells == cs &&
                     U.compareAndSetInt(this, CELLSBUSY, 0, 1)) {
-                boolean init = false;
+                // 初始化counterCell长度位2 
+                // 理论上只有1个线程可以进入
+//                boolean init = false;
                 try {                           // Initialize table
                     if (counterCells == cs) {
                         CounterCell[] rs = new CounterCell[2];
                         rs[h & 1] = new CounterCell(x);
                         counterCells = rs;
-                        init = true;
+//                        init = true;
+                        break;
                     }
                 } finally {
                     cellsBusy = 0;
                 }
-                if (init)
-                    break;
+//                if (init)
+//                    break;
             }
-            else if (U.compareAndSetLong(this, BASECOUNT, v = baseCount, v + x))
+            else if (U.compareAndSetLong(this, BASECOUNT, v = baseCount, v + x)) //重新尝试设置baseCount,成功则返回，否则继续循环
                 break;                          // Fall back on using base
         }
     }

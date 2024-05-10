@@ -19,7 +19,7 @@ public class Test {
     public static void main(String[] args) throws Exception {
         Map<String, Object> temp = new HashMap<>();
         ConcurrentHashMap<String, Object> map = new ConcurrentHashMap<>(temp);
-        List<CompletableFuture> list = new ArrayList<>();
+        List<CompletableFuture<Void>> list = new ArrayList<>();
         for (int i1 = 0; i1 < 15; i1++) {
             final int i = i1;
             CompletableFuture<Void> com = CompletableFuture.runAsync(() -> {
@@ -29,7 +29,7 @@ public class Test {
         }
 
 
-        for (CompletableFuture future : list) {
+        for (CompletableFuture<Void> future : list) {
             future.join();
         }
 
