@@ -213,10 +213,10 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
             // 多线程竞争希望设置baseCount ，则会进入该方法
             CounterCell c; long v; int m;
             boolean uncontended = true;
-            if (cs == null || (m = cs.length - 1) < 0 ||
-                    (c = cs[ThreadLocalRandom.getProbe() & m]) == null ||
-                    !(uncontended =
-                            U.compareAndSetLong(c, CELLVALUE, v = c.value, v + x))) {
+            if (cs == null || (m = cs.length - 1) < 0
+                    || (c = cs[ThreadLocalRandom.getProbe() & m]) == null
+                    || !(uncontended = U.compareAndSetLong(c, CELLVALUE, v = c.value, v + x)) // 设置cell失败
+                ) {
                 fullAddCount(x, uncontended);
                 return;
             }
@@ -244,6 +244,7 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
     }
 
     /**
+     * 这个方法目的只有一个，要么把x加到baseCount，要么把x加到counterCell中
      * @param x the count to add
      * @param wasUncontended 代表对counterCell的竞争状态，如果为false，则代表是多线程竞争 ， true则无竞争
      */
@@ -257,9 +258,12 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
         }
         boolean collide = false;                // True if last slot nonempty
         for (;;) {
-            CounterCell[] cs; CounterCell c; int n; long v;
-            // 判断CounterCell 是否有初始化
+            CounterCell[] cs; CounterCell c;
+            // n 为 counterCells 的长度
+            int n; long v;
+            // 判断CounterCell 是否有初始化 
             if ((cs = counterCells) != null && (n = cs.length) > 0) {
+                // cell 为空，则创建一个并设置值
                 if ((c = cs[(n - 1) & h]) == null) {
                     if (cellsBusy == 0) {            // Try to attach new Cell
                         CounterCell r = new CounterCell(x); // Optimistic create
@@ -285,16 +289,22 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V>
                     }
                     collide = false;
                 }
-                else if (!wasUncontended)       // CAS already known to fail
+                else if (!wasUncontended)       // CAS already known to fail 
+                    // 若 wasUncontended == false 处于竞争状态， 设置为非竞争状态 ， 重新设置当前线程hash值
                     wasUncontended = true;      // Continue after rehash
                 else if (U.compareAndSetLong(c, CELLVALUE, v = c.value, v + x))
+                    // 尝试直接设置cell的值 ， 成功则退出循环
                     break;
-                else if (counterCells != cs || n >= NCPU)
+                else if (counterCells != cs // CounterCell过期
+                        || n >= NCPU // CounterCell数组长度过长 rehash
+                )
                     collide = false;            // At max size or stale
-                else if (!collide)
+                else if (!collide) 
+                    // 线程竞争激烈 ， 重新设置hash
                     collide = true;
                 else if (cellsBusy == 0 &&
                         U.compareAndSetInt(this, CELLSBUSY, 0, 1)) {
+                    // 多次cas失败，尝试扩容
                     try {
                         if (counterCells == cs) // Expand table unless stale
                             counterCells = Arrays.copyOf(cs, n << 1);
