@@ -1,6 +1,5 @@
 package com.chen.tool.juejin.parseMathExpression;
 
-import com.chen.jatool.common.exception.ServiceException;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -47,7 +46,7 @@ public class SimpleExpressionParser1 extends SimpleExpressionParser {
             String var = str.substring(startPos, this.pos);
             x = map.get(var);
             if (x == null) {
-                throw new ServiceException("Unknown variable: " + var);
+                throw new RuntimeException("Unknown variable: " + var);
             }
         } else {
             throw new RuntimeException("Unexpected: " + (char) ch);
