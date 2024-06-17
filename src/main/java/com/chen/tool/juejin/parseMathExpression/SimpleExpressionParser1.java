@@ -33,7 +33,6 @@ public class SimpleExpressionParser1 extends SimpleExpressionParser {
         if (expect('-')) return parseFactor().negate();
 
         BigDecimal x;
-        // 跳过空格
         int startPos = this.pos;
         if (expect('(')) {
             x = parseExpression();
