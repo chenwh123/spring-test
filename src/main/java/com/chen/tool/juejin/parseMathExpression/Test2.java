@@ -16,16 +16,16 @@ public class Test2 {
         ExpressionParser parser = new SpelExpressionParser();
         StandardEvaluationContext ctx = new StandardEvaluationContext();
 
-//        Long start = System.currentTimeMillis();
-//        Expression expression = parser.parseExpression("#a * #b+ 3.0 / 5");
-//        for (int i = 0; i < 1000000; i++) {
-//            ctx.setVariable("a", 5);
-//            ctx.setVariable("b", 10);
-//            Double value = expression.getValue(ctx, Double.class);
-//        }
-//        Long consumeSecond = (System.currentTimeMillis() - start); // 0.5秒左右
-//        System.out.println(consumeSecond);
-        Double value = parser.parseExpression("T(java.lang.Math).max(1,5)").getValue(Double.class);
-        System.out.println(value);
+        Long start = System.currentTimeMillis();
+        Expression expression = parser.parseExpression("#a * #b+ 3.0 / 5");
+        for (int i = 0; i < 1000000; i++) {
+            ctx.setVariable("a", 5);
+            ctx.setVariable("b", 10);
+            Double value = expression.getValue(ctx, Double.class);
+        }
+        Long consumeSecond = (System.currentTimeMillis() - start); // 0.5秒左右
+        System.out.println(consumeSecond);
+//        Double value = parser.parseExpression("T(java.lang.Math).max(1,5)").getValue(Double.class);
+//        System.out.println(value);
     }
 }
