@@ -1,6 +1,7 @@
 package com.chen.tool.juejin.parseMathExpression;
 
 
+import javax.script.ScriptException;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
@@ -65,5 +66,15 @@ public class SimpleExpressionParser1 extends SimpleExpressionParser {
             put("c", new BigDecimal(3));
             put("d", new BigDecimal(-4));
         }}));
+
+        Long start = System.currentTimeMillis();
+        for (int i = 0; i < 1000000; i++) {
+            SimpleExpressionParser1.parse("a * b + 3 / 5", new HashMap<>() {{
+                put("a", new BigDecimal(5));
+                put("b", new BigDecimal(10));
+            }});
+        }
+        Long consumeSecond = (System.currentTimeMillis() - start);
+        System.out.println(consumeSecond); // 0.3秒左右
     }
 }

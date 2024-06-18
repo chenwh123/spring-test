@@ -17,6 +17,6 @@ public class Test1 {
             }});
         }
         Long consumeSecond = (System.currentTimeMillis() - start) ;
-        System.out.println(consumeSecond);
+        System.out.println(consumeSecond); // 0.3秒左右
     }
 }
