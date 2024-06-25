@@ -23,7 +23,7 @@ public class Test {
                 Order order = delayQueue.take();
                 log.info("{}", order);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                log.error("");
             }
         }
 
